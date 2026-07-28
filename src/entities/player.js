@@ -90,6 +90,7 @@
       this.vel.z += (dz / l) * 6;
       this.vel.y = Math.max(this.vel.y, 3);
     }
+    this.game.audio.hurt();
     this.game.bus.emit('playerhurt', n);
     if (this.hp <= 0) this.game.bus.emit('playerdown');
     return true;
@@ -117,6 +118,17 @@
     }
     this.camDist = U.damp(this.camDist, this.camWant, 9, dt);
 
+    /* ---- riding: the vehicle drives, we just sit and look ---- */
+    if (this.mount) {
+      this.hurtCooldown = Math.max(0, this.hurtCooldown - dt);
+      this.attackCooldown = Math.max(0, this.attackCooldown - dt);
+      this.swimming = false;
+      this.onGround = true;
+      this._rideAnim(dt);
+      this._camera(dt);
+      return;
+    }
+
     /* ---- movement ---- */
     const ax = IN.axis();
     const moving = ax.x !== 0 || ax.y !== 0;
@@ -124,7 +136,8 @@
     const canRun = wantRun && this.stamina > 1 && moving;
     let speed = PC.speed * (canRun ? PC.runMul : 1);
     if (this.energy <= 0) speed *= 0.55;
-    if (this.inWater) speed *= 0.62;
+    if (this.swimming) speed = PC.speed * (canRun ? 0.78 : 0.58);
+    else if (this.inWater) speed *= 0.62;
 
     const cy = this.camYaw;
     const fx = -Math.sin(cy), fz = -Math.cos(cy);
@@ -164,13 +177,30 @@
 
     const ground = world.heightAt(this.pos.x, this.pos.z);
     this.inWater = ground < W.waterLevel - 0.25;
-    const floor = this.inWater ? Math.max(ground, W.waterLevel - 1.15) : ground;
-    if (this.pos.y <= floor) {
-      this.pos.y = floor;
+    /* deep water: swim at the surface instead of being blocked by it */
+    const wasSwimming = this.swimming;
+    this.swimming = !this.mount && ground < W.waterLevel - 1.25;
+    if (this.swimming) {
+      const surface = W.waterLevel - 0.62;
+      // buoyancy cancels gravity outright, otherwise the pull downward and
+      // the pull to the surface balance out well below the waterline
       this.vel.y = 0;
-      this.onGround = true;
-    } else if (this.pos.y > floor + 0.06) {
+      this.pos.y = U.damp(this.pos.y, surface, 9, dt);
       this.onGround = false;
+      if (!wasSwimming && this.game.audio) this.game.audio.splash(true);
+      // swimming is tiring
+      this.stamina = Math.max(0, this.stamina - dt * 2.6);
+      if (this.stamina <= 0) this.hp = Math.max(1, this.hp - dt * 2);
+    } else {
+      const floor = this.inWater ? Math.max(ground, W.waterLevel - 1.15) : ground;
+      if (this.pos.y <= floor) {
+        this.pos.y = floor;
+        this.vel.y = 0;
+        this.onGround = true;
+      } else if (this.pos.y > floor + 0.06) {
+        this.onGround = false;
+      }
+      if (wasSwimming && this.game.audio) this.game.audio.splash(false);
     }
 
     /* ---- facing ---- */
@@ -198,10 +228,8 @@
     this._camera(dt);
   };
 
-  /** blocked by deep water or a solid building */
+  /** blocked only by solid buildings — deep water is swimmable */
   Player.prototype._canStand = function (x, z) {
-    const h = this.game.world.heightAt(x, z);
-    if (h < W.waterLevel - 1.7) return false;
     if (this.game.building && this.game.building.blocks(x, z, true)) return false;
     return true;
   };
@@ -215,6 +243,20 @@
     const spd = Math.hypot(this.vel.x, this.vel.z);
     this.walkPhase += dt * (2.6 + spd * 1.25);
     const sw = Math.sin(this.walkPhase * 2) * Math.min(1, spd / 5) * (running ? 1.15 : 0.85);
+
+    if (this.swimming) {
+      // horizontal float: body tipped forward, alternating front crawl
+      o.rotation.x = -0.95;
+      o.position.y += 0.55;
+      const s2 = Math.sin(this.walkPhase * 2.6);
+      ud.armL.rotation.x = -1.7 + s2 * 1.5;
+      ud.armR.rotation.x = -1.7 - s2 * 1.5;
+      ud.legL.rotation.x = s2 * 0.42;
+      ud.legR.rotation.x = -s2 * 0.42;
+      ud.torso.rotation.z = s2 * 0.1;
+      return;
+    }
+    o.rotation.x = 0;
 
     if (this.onGround) {
       ud.legL.rotation.x = sw * 0.85;
@@ -254,6 +296,18 @@
     else ud.torso.rotation.x = U.damp(ud.torso.rotation.x, 0, 10, dt);
   };
 
+  /** seated pose while driving a boat or car */
+  Player.prototype._rideAnim = function (dt) {
+    const ud = this.object.userData, o = this.object;
+    o.position.lerp(this.pos, Math.min(1, dt * 26));
+    o.rotation.set(0, this.yaw, 0);
+    ud.legL.rotation.x = -1.35; ud.legR.rotation.x = -1.35;
+    ud.armL.rotation.x = -1.15; ud.armR.rotation.x = -1.15;
+    ud.torso.rotation.set(0, 0, 0);
+    ud.torso.position.y = 0.86;
+    ud.head.position.y = 1.34;
+  };
+
   Player.prototype._camera = function (dt) {
     const cam = this.game.camera, world = this.game.world;
     const targetY = this.pos.y + 1.45;
@@ -285,7 +339,9 @@
         if (c >= want - 0.01 || p2 >= 1.32) break;
       }
     }
-    d = Math.max(2.4, d);
+    // keep a usable distance: we lift the camera over the ridge below
+    // instead of jamming it into the back of the player's head
+    d = Math.max(Math.min(want, 3.4), Math.min(want, Math.max(d, want * 0.45)));
 
     const cp = Math.cos(pitch), sp = Math.sin(pitch);
     const dirX = Math.sin(this.camYaw) * cp;
@@ -294,6 +350,15 @@
     const wantZ = this.pos.z + dirZ * d;
     let wantY = targetY + sp * d;
     wantY = Math.max(wantY, world.heightAt(wantX, wantZ) + 0.85);
+    /* clear the highest ground between camera and player, so a bank or dune
+       behind you never fills the screen */
+    let ridge = -Infinity;
+    for (let i = 1; i <= 5; i++) {
+      const t = (i / 5) * d;
+      const h = world.heightAt(this.pos.x + dirX * t, this.pos.z + dirZ * t);
+      if (h > ridge) ridge = h;
+    }
+    wantY = Math.max(wantY, ridge + 1.15);
 
     if (this._firstFrame) {
       this.camPos.set(wantX, wantY, wantZ);

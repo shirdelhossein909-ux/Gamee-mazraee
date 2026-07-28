@@ -20,6 +20,10 @@
     this.weatherLeft = 3;
     this.nightFactor = 0;
     this.dayFactor = 1;
+    /* weather changes are eased in over several seconds — snapping the
+       light level the instant a storm rolls in reads as a hard flicker */
+    this.wLight = 1;
+    this.wFog = 1;
     this._flash = 0;
     this._windAngle = Math.random() * 6.283;
 
@@ -240,6 +244,11 @@
     this.weatherLeft -= dt * (24 / T.dayLength);
     if (this.weatherLeft <= 0) this.rollWeather();
 
+    // ease toward the new weather's light/fog instead of snapping to it
+    const wt = C.WEATHER[this.weather];
+    this.wLight = U.damp(this.wLight, wt.light, 0.5, dt);
+    this.wFog = U.damp(this.wFog, wt.fog, 0.5, dt);
+
     this.apply(player);
     this._stepPrecip(dt, player);
 
@@ -268,11 +277,14 @@
     const a = ((t.hours - 6) / 24) * U.PI2;
     const sy = Math.sin(a), sx = Math.cos(a);
 
-    // 0 at night, 1 at midday
+    // 0 at night, 1 at midday — every colour below blends on these two
+    // factors so dawn and dusk roll in gradually instead of snapping.
     const day = U.smoothstep(-0.16, 0.30, sy);
     const golden = U.smoothstep(-0.05, 0.16, sy) * (1 - U.smoothstep(0.14, 0.42, sy));
+    const nightF = 1 - U.smoothstep(-0.10, 0.15, sy);      // smooth day↔night blend
+    const dayF = 1 - nightF;
     this.dayFactor = day;
-    this.nightFactor = 1 - day;
+    this.nightFactor = nightF;
 
     const px = player ? player.x : 0, pz = player ? player.z : 0;
 
@@ -280,23 +292,29 @@
     const dirX = sx * 0.55, dirY = sy, dirZ = sx * 0.42 + 0.55;
     const len = Math.hypot(dirX, dirY, dirZ) || 1;
     const upX = dirX / len, upY = dirY / len, upZ = dirZ / len;
-    const night = sy < 0;
-    const lx = night ? -upX : upX, ly = night ? -upY : upY, lz = night ? -upZ : upZ;
+    const below = sy < 0;
+    const lx = below ? -upX : upX, ly = below ? -upY : upY, lz = below ? -upZ : upZ;
 
     this.sun.position.set(px + lx * 120, ly * 130 + 12, pz + lz * 120);
     this.sun.target.position.set(px, 0, pz);
     this.sun.target.updateMatrixWorld();
 
     const flash = this._flash > 0 ? 1.6 : 0;
-    const lightMul = w.light;
-    this.sun.intensity = (night ? 0.30 : 0.35 + day * 0.95) * lightMul + flash;
-    this.sun.color.setHex(night ? 0x93b4e8 : (golden > 0.25 ? 0xffc48a : 0xfff3dc));
+    const lightMul = this.wLight;
+    /* The key light swaps from sun to moon exactly at the horizon, which
+       would fling every shadow to the opposite side in one frame. Fading it
+       almost to nothing across the crossover hides the swap completely —
+       ambient and hemisphere light carry the scene for those few seconds. */
+    const dip = 0.05 + 0.95 * U.smoothstep(0, 0.17, Math.abs(sy));
+    this.sun.intensity = U.lerp(0.30, 0.35 + day * 0.95, dayF) * lightMul * dip + flash;
+    mixHex(this.sun.color, 0x93b4e8, 0xfff3dc, dayF);
+    this.sun.color.lerp(tmpHex(0xffb072), golden * 0.85);
 
     this.hemi.intensity = (0.22 + day * 0.42) * lightMul + flash * 0.5;
-    this.hemi.color.setHex(night ? 0x2b3f66 : 0xbfd8f0);
-    this.hemi.groundColor.setHex(night ? 0x1a2118 : 0x53603c);
+    mixHex(this.hemi.color, 0x2b3f66, 0xbfd8f0, dayF);
+    mixHex(this.hemi.groundColor, 0x1a2118, 0x53603c, dayF);
     this.ambient.intensity = (0.14 + day * 0.16) * lightMul + flash * 0.4;
-    this.ambient.color.setHex(night ? 0x5f7ab0 : 0xffffff);
+    mixHex(this.ambient.color, 0x5f7ab0, 0xffffff, dayF);
 
     // sky gradient
     const c = this.uni;
@@ -306,17 +324,15 @@
     mixHex(c.top.value, nightTop, dayTop, day);
     mixHex(c.mid.value, nightMid, dayMid, day);
     mixHex(c.bottom.value, nightBot, dayBot, day);
-    if (golden > 0.01) {
-      c.top.value.lerp(tmpHex(duskTop), golden * 0.85);
-      c.mid.value.lerp(tmpHex(duskMid), golden * 0.9);
-      c.bottom.value.lerp(tmpHex(duskBot), golden * 0.95);
-    }
-    if (w.light < 0.8) {
-      const g = 1 - w.light;
-      c.top.value.lerp(tmpHex(0x53616e), g * 0.75);
-      c.mid.value.lerp(tmpHex(0x6b7885), g * 0.8);
-      c.bottom.value.lerp(tmpHex(0x8b95a0), g * 0.8);
-    }
+    /* no `if` guards here on purpose: a threshold makes the sky jump the
+       instant it is crossed. A zero-weight lerp is already a no-op. */
+    c.top.value.lerp(tmpHex(duskTop), golden * 0.85);
+    c.mid.value.lerp(tmpHex(duskMid), golden * 0.9);
+    c.bottom.value.lerp(tmpHex(duskBot), golden * 0.95);
+    const gloom = U.smoothstep(0.95, 0.4, this.wLight);
+    c.top.value.lerp(tmpHex(0x53616e), gloom * 0.75);
+    c.mid.value.lerp(tmpHex(0x6b7885), gloom * 0.8);
+    c.bottom.value.lerp(tmpHex(0x8b95a0), gloom * 0.8);
     if (flash) { c.top.value.addScalar(0.45); c.mid.value.addScalar(0.5); c.bottom.value.addScalar(0.5); }
 
     c.sunDir.value.set(upX, upY, upZ);
@@ -325,23 +341,24 @@
 
     this.dome.position.set(px, 0, pz);
     this.stars.position.set(px, 0, pz);
-    this.starMat.opacity = U.clamp01(this.nightFactor * 1.4 - 0.25) * (w.light > 0.7 ? 1 : 0.25);
+    this.starMat.opacity = U.clamp01(nightF * 1.4 - 0.25) * U.clamp01((this.wLight - 0.5) * 3);
     this.stars.visible = this.starMat.opacity > 0.02;
 
     this.sunDisc.position.set(px + upX * 430, upY * 430, pz + upZ * 430);
     this.sunDisc.visible = upY > -0.15;
     this.moonDisc.position.set(px - upX * 430, -upY * 430, pz - upZ * 430);
     this.moonDisc.visible = -upY > -0.15;
-    this.cloudMat.opacity = 0.28 + (1 - w.light) * 0.62;
-    this.cloudMat.color.setHex(this.weather === 'storm' ? 0x6a7078 : (night ? 0x8b96ad : 0xffffff));
+    this.cloudMat.opacity = 0.28 + (1 - this.wLight) * 0.62;
+    mixHex(this.cloudMat.color, 0x8b96ad, 0xffffff, dayF);
+    if (this.weather === 'storm') this.cloudMat.color.lerp(tmpHex(0x6a7078), 0.75);
 
     // fog follows the horizon colour
     const scene = this.scene;
     if (scene.fog) {
       scene.fog.color.copy(c.bottom.value).lerp(c.mid.value, 0.35);
       const base = C.WORLD.chunkSize * (C.WORLD.viewRadius + 0.35);
-      scene.fog.near = base * 0.30 / w.fog;
-      scene.fog.far = base * 1.5 / w.fog;
+      scene.fog.near = base * 0.30 / this.wFog;
+      scene.fog.far = base * 1.5 / this.wFog;
     }
     if (this.game.renderer) this.game.renderer.setClearColor(c.bottom.value);
   };
@@ -349,6 +366,7 @@
   const _tmp = new THREE.Color();
   function tmpHex(h) { return _tmp.setHex(h); }
   const _a = new THREE.Color(), _b = new THREE.Color();
+  /** out = lerp(hexA, hexB, t) — used everywhere so nothing ever hard-switches */
   function mixHex(out, h1, h2, t) {
     _a.setHex(h1); _b.setHex(h2);
     out.copy(_a).lerp(_b, t);

@@ -43,6 +43,8 @@
         farm: game.farming.serialize(),
         build: game.building.serialize(),
         progress: game.progress.serialize(),
+        settlers: game.settlers.serialize(),
+        vehicles: game.vehicles.serialize(),
         harvested: game.world.harvested,
         economy: { mult: game.economy.mult }
       };
@@ -79,6 +81,8 @@
       if (d.inv) game.inv.deserialize(d.inv);
       if (d.player) game.player.deserialize(d.player);
       if (d.build) game.building.deserialize(d.build);
+      game.settlers.deserialize(d.settlers);
+      game.vehicles.deserialize(d.vehicles);
       if (d.farm) game.farming.deserialize(d.farm);
       if (d.economy && d.economy.mult) game.economy.mult = d.economy.mult;
       game.progress.recalc();

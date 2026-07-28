@@ -28,6 +28,7 @@
     return Math.max(0, t);
   }
 
+  /** where hit sparks and damage numbers appear */
   function nodeSphere(n) {
     if (n.kind === 'tree') {
       const h = n.obj.userData.height || 5;
@@ -37,38 +38,76 @@
     return { y: n.y + 0.4, r: 0.7 };
   }
 
+  /* A tree is a tall thin thing: one sphere in the canopy means aiming at the
+     trunk — which is what you naturally do up close — misses entirely. Walk a
+     few spheres up the trunk instead so the whole tree is clickable. */
+  function nodeHit(n, origin, dir, maxT) {
+    if (n.kind === 'tree') {
+      const h = n.obj.userData.height || 5;
+      const r = Math.max(0.95, h * 0.17);
+      let best = -1;
+      for (let i = 0; i < 4; i++) {
+        const y = n.y + 0.55 + h * 0.78 * (i / 3);
+        const t = sphereHit(origin, dir, n.x, y, n.z, i === 0 ? r * 0.8 : r, maxT);
+        if (t >= 0 && (best < 0 || t < best)) best = t;
+      }
+      return best;
+    }
+    if (n.kind === 'ore') return sphereHit(origin, dir, n.x, n.y + 0.7, n.z, 1.25, maxT);
+    return sphereHit(origin, dir, n.x, n.y + 0.4, n.z, 0.85, maxT);
+  }
+
   Gathering.prototype.pickTarget = function () {
     const g = this.game, p = g.player;
     const ray = p.aimRay();
-    const reach = C.PLAYER.reach + 1.5;
+    /* The ray starts at the CAMERA, which sits several metres behind the
+       player, so every ray budget has to include that offset — otherwise a
+       tree two steps away sits past the cut-off and is never even seen. */
+    const camOff = Math.hypot(
+      ray.origin.x - p.pos.x,
+      ray.origin.y - (p.pos.y + 1.4),
+      ray.origin.z - p.pos.z
+    );
+    const reach = C.PLAYER.reach;
+    const maxT = camOff + reach + 3;
     let best = null, bt = 1e9;
 
     /* animals */
-    const ah = g.wildlife.rayPick(ray.origin, ray.dir, reach + 2.5);
+    const ah = g.wildlife.rayPick(ray.origin, ray.dir, maxT + 2);
     if (ah) { best = { kind: 'animal', animal: ah.animal, dist: ah.dist, x: ah.animal.x, z: ah.animal.z }; bt = ah.dist; }
 
     /* resource nodes near the player */
-    const nodes = g.world.nodesNear(p.pos.x, p.pos.z, reach + 4);
+    const nodes = g.world.nodesNear(p.pos.x, p.pos.z, reach + 6);
     for (const n of nodes) {
-      const s = nodeSphere(n);
-      const t = sphereHit(ray.origin, ray.dir, n.x, s.y, n.z, s.r, reach + 2);
+      const t = nodeHit(n, ray.origin, ray.dir, maxT);
       if (t >= 0 && t < bt) { bt = t; best = { kind: 'node', node: n, dist: t, x: n.x, z: n.z }; }
     }
 
     /* buildings */
     if (g.building) {
       for (const b of g.building.list) {
-        if (U.dist2(p.pos.x, p.pos.z, b.x, b.z) > 400) continue;
+        if (U.dist2(p.pos.x, p.pos.z, b.x, b.z) > 900) continue;
         const r = Math.max(b.def.size[0], b.def.size[1]) * 0.55 + 0.3;
-        const t = sphereHit(ray.origin, ray.dir, b.x, b.y + 1.2, b.z, r, reach + 3);
+        const t = sphereHit(ray.origin, ray.dir, b.x, b.y + 1.2, b.z, r, maxT + 2);
         if (t >= 0 && t < bt) { bt = t; best = { kind: 'building', building: b, dist: t, x: b.x, z: b.z }; }
       }
     }
 
+    /* vehicles */
+    if (g.vehicles) {
+      for (const v of g.vehicles.list) {
+        if (v.mounted) continue;
+        const t = sphereHit(ray.origin, ray.dir, v.x, v.y + 0.9, v.z, 1.7, maxT + 2);
+        if (t >= 0 && t < bt) { bt = t; best = { kind: 'vehicle', vehicle: v, dist: t, x: v.x, z: v.z }; }
+      }
+    }
+
     /* ground / plots / water */
-    const gr = g.world.rayGround(ray.origin, ray.dir, 60);
+    const gr = g.world.rayGround(ray.origin, ray.dir, camOff + 60);
     if (gr && gr.dist < bt + 0.6) {
-      const plot = g.farming.plotAt(gr.point.x, gr.point.z);
+      // snap to a plot the crosshair lands just short of or beside
+      const plot = g.farming.plotAt(gr.point.x, gr.point.z) ||
+        g.farming.nearestPlot(gr.point.x, gr.point.z, C.WORLD.gridSize * 0.85);
       const water = gr.point.y < C.WORLD.waterLevel + 0.05;
       if (plot && gr.dist < bt) {
         best = { kind: 'plot', plot: plot, dist: gr.dist, point: gr.point, x: plot.x, z: plot.z };
@@ -79,11 +118,63 @@
         };
       }
     }
-    if (best && best.kind !== 'ground' && best.kind !== 'water' && best.dist > C.PLAYER.reach + 2) {
-      best.tooFar = true;
+    /* "too far" is about the PLAYER's arm, never the camera boom */
+    if (best) {
+      best.playerDist = U.dist(p.pos.x, p.pos.z, best.x, best.z);
+      if (best.kind !== 'ground' && best.kind !== 'water') {
+        let allow = reach;
+        if (best.kind === 'node') allow += best.node.kind === 'tree' ? 1.6 : 1.0;
+        if (best.kind === 'building') allow += Math.max(best.building.w, best.building.d) * 0.5;
+        if (best.kind === 'vehicle') allow += 1.2;
+        best.tooFar = best.playerDist > allow;
+      }
     }
     this.target = best;
     return best;
+  };
+
+  /* Which node does an axe/pickaxe swing at? The crosshair takes priority,
+     but standing close to a tree makes you look slightly *past* or *below*
+     it, so fall back to whatever matching node is in reach and in front. */
+  Gathering.prototype.nodeFor = function (kind) {
+    const t = this.target;
+    if (t && t.kind === 'node' && t.node.kind === kind && !t.tooFar) return t.node;
+    const p = this.game.player;
+    const allow = C.PLAYER.reach + (kind === 'tree' ? 1.6 : 1.0);
+    const list = this.game.world.nodesNear(p.pos.x, p.pos.z, allow);
+    /* "in front" means where the camera is aimed — the body's yaw lags a few
+       frames behind on the swing and would reject the tree you are facing */
+    const dir = p.aimRay().dir;
+    let fx = dir.x, fz = dir.z;
+    const fl = Math.hypot(fx, fz) || 1;
+    fx /= fl; fz /= fl;
+    let best = null, bs = -1;
+    for (const n of list) {
+      if (n.kind !== kind) continue;
+      const dx = n.x - p.pos.x, dz = n.z - p.pos.z;
+      const d = Math.hypot(dx, dz);
+      if (d > allow) continue;
+      const dot = d > 0.01 ? (dx * fx + dz * fz) / d : 1;
+      if (dot < 0.15) continue;                  // roughly in front of us
+      const score = dot - d * 0.08;
+      if (score > bs) { bs = score; best = n; }
+    }
+    return best;
+  };
+
+  /* Which plot does a farming tool act on? Prefer what the crosshair is on,
+     but fall back to the tile underfoot and then the closest one in reach —
+     aiming precisely at a tile you are already standing on is fiddly. */
+  Gathering.prototype.plotFor = function (filter) {
+    const g = this.game, p = g.player;
+    const t = this.target;
+    if (t && t.kind === 'plot' && !t.tooFar && (!filter || filter(t.plot))) return t.plot;
+    const under = g.farming.plotAt(p.pos.x, p.pos.z);
+    if (under && (!filter || filter(under))) return under;
+    let from = p.pos;
+    if (t && t.point) from = t.point;
+    return g.farming.nearestPlot(from.x, from.z, C.PLAYER.reach, filter) ||
+      g.farming.nearestPlot(p.pos.x, p.pos.z, C.PLAYER.reach, filter);
   };
 
   /** short label + hint shown under the crosshair */
@@ -136,8 +227,12 @@
           hp: b.maxHp ? b.hp / b.maxHp : 1
         };
       }
+      case 'vehicle': {
+        const v = t.vehicle;
+        return { name: v.def.icon + ' ' + v.def.name + ' — سطح ' + U.fa(v.level), hint: 'کلید E یا V: سوار شدن' };
+      }
       case 'water':
-        return { name: '💧 آب', hint: 'چوب ماهیگیری: ماهیگیری · آبپاش: پر کردن' };
+        return { name: '💧 آب', hint: 'چوب ماهیگیری: ماهیگیری · آبپاش: پر کردن · شنا: مستقیم برو داخل' };
       default:
         return null;
     }
@@ -154,41 +249,50 @@
 
     switch (toolId) {
       case 'axe': {
-        if (t && t.kind === 'node' && t.node.kind === 'tree' && !t.tooFar) return this._chop(t.node);
-        if (t && t.kind === 'node' && t.node.kind === 'bush' && !t.tooFar) return this._forage(t.node);
-        p.swing('swing'); this.cooldown = 0.35;
+        const tree = this.nodeFor('tree');
+        if (tree) return this._chop(tree);
+        const bush = this.nodeFor('bush');
+        if (bush) return this._forage(bush);
+        p.swing('swing'); g.audio.swing(); this.cooldown = 0.35;
         break;
       }
       case 'pickaxe': {
-        if (t && t.kind === 'node' && t.node.kind === 'ore' && !t.tooFar) return this._mine(t.node);
-        p.swing('swing'); this.cooldown = 0.35;
+        const ore = this.nodeFor('ore');
+        if (ore) return this._mine(ore);
+        p.swing('swing'); g.audio.swing(); this.cooldown = 0.35;
         break;
       }
       case 'hoe': {
-        const pt = t && t.point ? t.point : p.frontPoint(1.8);
+        let pt = t && t.point ? t.point : p.frontPoint(1.8);
         if (t && t.kind === 'plot') { g.ui.toast('این قطعه از قبل شخم خورده', 'bad'); return; }
-        if (U.dist(p.pos.x, p.pos.z, pt.x, pt.z) > C.PLAYER.reach) { g.ui.toast('خیلی دور است', 'bad'); return; }
+        // aiming past arm's length still tills the ground right in front of you
+        if (U.dist(p.pos.x, p.pos.z, pt.x, pt.z) > C.PLAYER.reach + 0.5) pt = p.frontPoint(2.0);
         p.swing('swing'); this.cooldown = 0.5;
         g.farming.till(pt.x, pt.z);
         break;
       }
       case 'seeds': {
-        if (t && t.kind === 'plot' && !t.plot.crop && !t.tooFar) {
+        const plot = this.plotFor(function (x) { return !x.crop; });
+        if (plot) {
           p.swing('plant'); this.cooldown = 0.35;
-          g.farming.plant(t.plot, g.inv.selectedSeed);
-        } else g.ui.toast('🌱 روی یک قطعه شخم‌خورده نشانه بگیر', 'bad');
+          g.farming.plant(plot, g.inv.selectedSeed);
+        } else {
+          g.ui.toast('🌱 اول زمین را شخم بزن (کلید ۱)', 'bad');
+          g.audio.deny();
+        }
         break;
       }
       case 'can': {
-        if (t && (t.kind === 'water') && !t.tooFar) { g.farming.tryRefill(); return; }
-        if (t && t.kind === 'plot' && !t.tooFar) {
+        if (t && t.kind === 'water' && !t.tooFar) { g.farming.tryRefill(); return; }
+        const plot = this.plotFor(function (x) { return x.moisture < 0.8; }) || this.plotFor();
+        if (plot) {
           const st = C.toolStat('can', prog.toolLevel('can'));
           p.swing('water'); this.cooldown = 0.35;
-          g.farming.water(t.plot);
+          g.farming.water(plot);
           if (st.radius) {
             for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) {
               if (!dx && !dz) continue;
-              const o = g.farming.plotAtCell(t.plot.gx + dx, t.plot.gz + dz);
+              const o = g.farming.plotAtCell(plot.gx + dx, plot.gz + dz);
               if (o && g.inv.water > 0) g.farming.water(o);
             }
           }
@@ -212,8 +316,17 @@
   Gathering.prototype.interact = function () {
     const g = this.game, t = this.target;
     if (this.fishing) { this.reelIn(); return; }
+    /* a ripe crop in reach is always worth grabbing, even if the crosshair
+       drifted onto the grass next to it */
+    const ripe = this.plotFor(function (x) { return x.crop && x.stage >= 3; });
+    if (ripe && (!t || t.kind !== 'building') && g.farming.harvest(ripe)) return;
+    if (!t || t.kind === 'ground') {
+      // nothing under the crosshair: forage or chop whatever is within arm's reach
+      const n = this.nodeFor('bush') || this.nodeFor('tree') || this.nodeFor('ore');
+      if (n) return n.kind === 'bush' ? this._forage(n) : n.kind === 'tree' ? this._chop(n) : this._mine(n);
+    }
     if (!t) return;
-    if (t.tooFar) { g.ui.toast('خیلی دور است', 'bad'); return; }
+    if (t.tooFar) { g.ui.toast('خیلی دور است', 'bad'); g.audio.deny(); return; }
     switch (t.kind) {
       case 'node':
         if (t.node.kind === 'bush') return this._forage(t.node);
@@ -227,6 +340,8 @@
         return;
       case 'building':
         return void g.ui.openStructure(t.building);
+      case 'vehicle':
+        return void g.vehicles.mount(t.vehicle);
       case 'water':
         if (!g.farming.tryRefill()) this.castLine();
         return;
@@ -244,8 +359,9 @@
       g.ui.toast('🔒 برای ' + node.name + ' به تبر سطح ' + U.fa(node.def.lvl) + ' نیاز داری', 'bad'); return;
     }
     const st = C.toolStat('axe', lvl);
-    if (!g.player.spend(st.cost)) { g.ui.toast('😮‍💨 انرژی کافی نداری', 'bad'); return; }
+    if (!g.player.spend(st.cost)) { g.ui.toast('😮‍💨 انرژی کافی نداری', 'bad'); g.audio.deny(); return; }
     g.player.swing('swing');
+    g.audio.chop();
     this.cooldown = 0.42;
     this._damageNode(node, st.power, 'woodcut', st.bonus, 0x4f7f3a);
   };
@@ -258,8 +374,9 @@
       g.ui.toast('🔒 برای ' + node.name + ' به کلنگ سطح ' + U.fa(node.def.lvl) + ' نیاز داری', 'bad'); return;
     }
     const st = C.toolStat('pickaxe', lvl);
-    if (!g.player.spend(st.cost)) { g.ui.toast('😮‍💨 انرژی کافی نداری', 'bad'); return; }
+    if (!g.player.spend(st.cost)) { g.ui.toast('😮‍💨 انرژی کافی نداری', 'bad'); g.audio.deny(); return; }
     g.player.swing('swing');
+    g.audio.mine();
     this.cooldown = 0.45;
     this._damageNode(node, st.power, 'mining', st.bonus, node.def.crystal || 0x9c9c96);
   };
@@ -284,6 +401,9 @@
     }
 
     /* collapsed — hand out drops */
+    if (node.kind === 'tree') g.audio.treeFall();
+    else if (node.kind === 'ore') g.audio.rockBreak();
+    else g.audio.harvest();
     const prog = g.progress;
     const skillLvl = prog.skill(skillId).level;
     const got = [];
@@ -322,9 +442,12 @@
     const st = C.toolStat('sword', lvl);
     if (!p.spend(st.cost)) { g.ui.toast('😮‍💨 نفس کم آوردی', 'bad'); return; }
     p.swing('swing');
+    g.audio.swing();
     this.cooldown = 0.45;
     const ray = p.aimRay();
-    const hit = g.wildlife.rayPick(ray.origin, ray.dir, st.range + 1.5);
+    // swing from the player's chest, not from the camera behind them
+    const from = new THREE.Vector3(p.pos.x, p.pos.y + 1.2, p.pos.z);
+    const hit = g.wildlife.rayPick(from, ray.dir, st.range + 1.5);
     const dmg = st.damage * (1 + prog.skill('combat').level * 0.05);
     if (hit) g.wildlife.hit(hit.animal, dmg, p.pos.x, p.pos.z);
     else {
@@ -341,6 +464,7 @@
     const st = C.toolStat('bow', lvl);
     if (!p.spend(st.cost)) { g.ui.toast('😮‍💨 نفس کم آوردی', 'bad'); return; }
     p.swing('bow');
+    g.audio.bow();
     this.cooldown = 0.62;
     const ray = p.aimRay();
     const origin = new THREE.Vector3(
@@ -374,6 +498,7 @@
     if (!g.player.spend(C.toolStat('rod', 1).cost)) { g.ui.toast('😮‍💨 انرژی کافی نداری', 'bad'); return; }
 
     g.player.swing('cast');
+    g.audio.cast();
     const lvl = prog.toolLevel('rod');
     const skill = prog.skill('fishing').level;
     const zone = U.clamp(0.16 + lvl * 0.028 + skill * 0.006, 0.16, 0.44);
@@ -394,6 +519,7 @@
       f.wait -= dt;
       if (f.wait <= 0) {
         f.biting = true;
+        this.game.audio.bite();
         this.game.ui.toast('🎣 یک چیزی گیر کرد!', 'gold');
       } else return;
     }
@@ -438,6 +564,9 @@
     prog.addSkill('fishing', pickd.xp);
     prog.addXp(Math.round(pickd.xp * 0.5));
     prog.stat('fish', 1);
+    g.audio.reel();
+    g.audio.splash(false);
+    g.audio.harvest();
     g.ui.toast('🎣 ' + C.ITEMS[pickd.id].icon + ' ' + C.ITEMS[pickd.id].name + ' گرفتی!', 'good');
     g.fx.hitBurst(g.player.pos.x, g.player.pos.y + 1, g.player.pos.z, 0x5fc8ff, 14);
     this.cancelFishing();
@@ -465,6 +594,7 @@
     g.player.heal(f.hp);
     g.player.stamina = Math.min(g.player.maxStamina, g.player.stamina + f.energy * 0.6);
     g.player.swing('water');
+    g.audio.eat();
     this.cooldown = 0.5;
     g.ui.toast('😋 ' + C.ITEMS[id].name + ' خوردی (+' + U.fa(f.energy) + ' انرژی)', 'good');
   };

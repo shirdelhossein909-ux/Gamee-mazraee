@@ -29,10 +29,28 @@
   };
   Farming.prototype.plotAtCell = function (gx, gz) { return this.plots.get(U.key(gx, gz)) || null; };
 
+  /** closest plot to a point, optionally filtered — used so tools still work
+      when the crosshair lands a little off the tile you are standing on */
+  Farming.prototype.nearestPlot = function (x, z, radius, filter) {
+    const cells = Math.ceil(radius / GS);
+    const c = this.cell(x, z);
+    let best = null, bd = radius * radius;
+    for (let dx = -cells; dx <= cells; dx++) {
+      for (let dz = -cells; dz <= cells; dz++) {
+        const p = this.plots.get(U.key(c.gx + dx, c.gz + dz));
+        if (!p || (filter && !filter(p))) continue;
+        const d = U.dist2(x, z, p.x, p.z);
+        if (d < bd) { bd = d; best = p; }
+      }
+    }
+    return best;
+  };
+
   /* ---------------- geometry caches ---------------- */
   Farming.prototype._soil = function (wet) {
     const k = wet ? 'w' : 'd';
-    if (!this._soilGeo[k]) this._soilGeo[k] = M.soil(GS * 0.94, wet).geometry;
+    // exactly one grid cell — adjacent plots butt together with no seam
+    if (!this._soilGeo[k]) this._soilGeo[k] = M.soil(GS, wet).geometry;
     const m = new THREE.Mesh(this._soilGeo[k], M.MAT.solid);
     m.receiveShadow = true;
     return m;
@@ -54,9 +72,17 @@
     const c = this.cell(x, z);
     if (this.plots.has(U.key(c.gx, c.gz))) return { ok: false, why: 'اینجا قبلاً شخم خورده' };
     const wx = c.gx * GS, wz = c.gz * GS;
-    const h = w.heightAt(wx, wz);
+    let h = w.footprint(wx, wz, GS, GS, 0).avg;
     if (h < C.WORLD.waterLevel + 0.4) return { ok: false, why: 'زمین زیر آب است' };
-    if (w.slopeAt(wx, wz, GS * 0.6) > 1.15) return { ok: false, why: 'زمین خیلی شیب‌دار است' };
+    if (w.slopeAt(wx, wz, GS * 0.6) > 1.6) return { ok: false, why: 'زمین خیلی شیب‌دار است' };
+    /* Terracing: a tile that touches an existing plot adopts its height, so a
+       block of plots reads as one flat, evenly ploughed field rather than a
+       staircase of separate patches. A big step starts a new terrace. */
+    const nb = [this.plotAtCell(c.gx + 1, c.gz), this.plotAtCell(c.gx - 1, c.gz),
+    this.plotAtCell(c.gx, c.gz + 1), this.plotAtCell(c.gx, c.gz - 1)];
+    let sum = 0, n = 0;
+    for (const p of nb) if (p && Math.abs(p.y - h) <= 1.6) { sum += p.y; n++; }
+    if (n) h = sum / n;
     if (this.game.building && this.game.building.occupied(wx, wz)) return { ok: false, why: 'اینجا ساختمان است' };
     return { ok: true, gx: c.gx, gz: c.gz, x: wx, z: wz, y: h };
   };
@@ -65,7 +91,8 @@
     const r = this.canTill(x, z);
     if (!r.ok) { this.game.ui.toast('⚠️ ' + r.why, 'bad'); return null; }
     const cost = C.toolStat('hoe', this.game.progress.toolLevel('hoe')).cost;
-    if (!this.game.player.spend(cost)) { this.game.ui.toast('😮‍💨 انرژی کافی نداری', 'bad'); return null; }
+    if (!this.game.player.spend(cost)) { this.game.ui.toast('😮‍💨 انرژی کافی نداری', 'bad'); this.game.audio.deny(); return null; }
+    this.game.audio.till();
 
     const plot = {
       gx: r.gx, gz: r.gz, x: r.x, z: r.z, y: r.y,
@@ -101,6 +128,7 @@
     plot.crop = cropId;
     plot.stage = 0; plot.growth = 0;
     this._refreshPlant(plot);
+    this.game.audio.plant();
     this.game.progress.addSkill('farming', 3);
     this.game.progress.stat('plant', 1);
     return true;
@@ -114,6 +142,7 @@
     inv.water--;
     plot.moisture = 1;
     this._refreshSoil(plot);
+    this.game.audio.pour();
     this.game.fx.hitBurst(plot.x, plot.y + 0.4, plot.z, 0x5fc8ff, 9);
     this.game.progress.addSkill('farming', 1);
     return true;
@@ -133,6 +162,7 @@
     prog.addXp(Math.round(def.xp * 0.5));
     prog.stat('harvest', 1);
     prog.stat('harvest_' + plot.crop, 1);
+    this.game.audio.harvest();
     this.game.ui.toast('🌾 ' + U.fa(got) + '× ' + def.name + ' برداشت شد', 'good');
     this.game.fx.hitBurst(plot.x, plot.y + 0.5, plot.z, def.colB, 12);
 
@@ -233,6 +263,7 @@
     if (!near && this.game.building) near = this.game.building.wellNear(p.pos.x, p.pos.z);
     if (!near) return false;
     inv.water = cap;
+    this.game.audio.pour();
     this.game.ui.toast('🪣 آبپاش پر شد (' + U.fa(cap) + ')', 'good');
     return true;
   };
@@ -251,7 +282,7 @@
     if (!arr) return;
     for (const r of arr) {
       const x = r[0] * GS, z = r[1] * GS;
-      const y = this.game.world.heightAt(x, z);
+      const y = this.game.world.footprint(x, z, GS, GS, 0).avg;
       const plot = {
         gx: r[0], gz: r[1], x: x, z: z, y: y,
         crop: r[2] && C.CROPS[r[2]] ? r[2] : null, stage: r[3] | 0, growth: r[4] || 0, moisture: r[5] || 0,

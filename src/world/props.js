@@ -43,6 +43,8 @@
   const MAT = {
     solid: new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }),
     glow: new THREE.MeshBasicMaterial({ vertexColors: true, fog: true }),
+    // window/lamp light: one shared material whose opacity follows dusk
+    window: new THREE.MeshBasicMaterial({ vertexColors: true, fog: true, transparent: true, opacity: 1 }),
     ghostOk: new THREE.MeshLambertMaterial({ color: 0x55ff88, transparent: true, opacity: 0.45, depthWrite: false }),
     ghostBad: new THREE.MeshLambertMaterial({ color: 0xff5555, transparent: true, opacity: 0.45, depthWrite: false }),
     terrain: new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }),
@@ -375,14 +377,22 @@
     return assemble(parts, true);
   };
 
-  /** tilled soil tile */
+  /** Tilled soil tile. Tiles are exactly one grid cell wide and the furrows
+      repeat on the same local offsets, so a block of plots reads as one
+      continuous, evenly ploughed field instead of separate patches. */
   M.soil = function (size, watered) {
     const parts = [];
-    parts.push({ g: P.box, c: watered ? COL.dirtWet : COL.dirt, p: [0, 0.06, 0], s: [size, 0.12, size] });
-    for (let i = 0; i < 3; i++) {
+    const bed = watered ? COL.dirtWet : COL.dirt;
+    const cut = watered ? 0x3a2917 : 0x574026;
+    // deep slab: terraced plots still meet the hillside without floating
+    parts.push({ g: P.box, c: bed, p: [0, -0.45, 0], s: [size, 1.1, size] });
+    // furrows run along X at a fixed spacing that tiles seamlessly
+    const rows = 4, step = size / rows;
+    for (let i = 0; i < rows; i++) {
       parts.push({
-        g: P.box, c: watered ? 0x3d2b1a : 0x5a3f28,
-        p: [0, 0.13, -size * 0.28 + i * size * 0.28], s: [size * 0.92, 0.05, size * 0.1]
+        g: P.box, c: cut,
+        p: [0, 0.09, -size / 2 + step * (i + 0.5)],
+        s: [size, 0.06, step * 0.42]
       });
     }
     const m = new THREE.Mesh(merge(parts), MAT.solid);
@@ -829,6 +839,38 @@
     return assemble(p, true);
   };
 
+  BM.stable = function (l) {
+    const p = [];
+    const w = 4.6, d = 3.4, h = 2.3 + l * 0.14;
+    p.push({ g: P.box, c: COL.stoneDark, p: [0, 0.1, 0], s: [w + 0.4, 0.2, d + 0.4] });
+    p.push({ g: P.box, c: l >= 3 ? COL.plank : COL.wood, p: [0, 0.2 + h / 2, -0.4], s: [w, h, d * 0.78] });
+    gable(p, 0, 0.2 + h, -0.4, w + 0.4, d * 0.85, 1.0, 0x7a4a28);
+    // stall doors (half-doors, open at the top)
+    for (let i = -1; i <= 1; i++) {
+      p.push({ g: P.box, c: COL.woodDark, p: [i * 1.5, 0.6, d * 0.0 + 1.0], s: [1.15, 0.8, 0.09] });
+      p.push({ g: P.box, c: 0x14100e, p: [i * 1.5, 1.35, d * 0.0 + 1.0], s: [1.15, 0.7, 0.06] });
+      p.push({ g: P.box, c: COL.wood, p: [i * 1.5, 1.0, d * 0.0 + 1.02], s: [1.3, 0.1, 0.11] });
+    }
+    // paddock fence
+    for (let i = 0; i < 6; i++) {
+      const x = -w / 2 + 0.2 + i * (w / 5.2);
+      p.push({ g: P.cyl6, c: COL.woodDark, p: [x, 0.55, d * 0.85], s: [0.16, 1.1, 0.16] });
+    }
+    p.push({ g: P.box, c: COL.wood, p: [0, 0.9, d * 0.85], s: [w, 0.1, 0.1] });
+    p.push({ g: P.box, c: COL.wood, p: [0, 0.55, d * 0.85], s: [w, 0.1, 0.1] });
+    // hay + trough
+    p.push({ g: P.box, c: COL.thatch, p: [w * 0.62, 0.42, d * 0.4], r: [0, 0.4, 0], s: [1.0, 0.85, 1.0] });
+    p.push({ g: P.box, c: COL.woodDark, p: [-w * 0.62, 0.3, d * 0.4], s: [0.7, 0.4, 1.4] });
+    if (l >= 2) {
+      p.push({ g: P.cone5, c: 0xd23b32, p: [0, 0.2 + h + 1.25, -0.4], s: [0.5, 0.6, 0.5] });
+    }
+    if (l >= 4) {
+      p.push({ g: P.box, c: COL.gold, p: [0, 0.2 + h * 0.5, 1.75], s: [1.0, 0.35, 0.08] });
+      p.push({ g: P.sph, c: COL.glassLit, glow: true, p: [w * 0.42, 2.1, 1.1], s: [0.26, 0.26, 0.26] });
+    }
+    return assemble(p);
+  };
+
   BM.dock = function (l) {
     const p = [];
     const len = 4.4 + l * 0.6;
@@ -1053,6 +1095,119 @@
         return null;
     }
     return assemble(p, true);
+  };
+
+  /* =========================================================
+     VEHICLES
+     ========================================================= */
+  M.boat = function (level) {
+    const p = [];
+    const l = 4.2 + (level - 1) * 0.5, w = 1.9;
+    const hull = level >= 3 ? COL.plank : COL.wood;
+    // hull: stacked planks tapering to a point at the bow
+    for (let i = 0; i < 4; i++) {
+      const t = i / 4;
+      p.push({ g: P.box, c: i % 2 ? hull : COL.woodDark, p: [0, 0.24 + i * 0.17, 0], s: [w - t * 0.35, 0.18, l - t * 0.5] });
+    }
+    p.push({ g: P.cone5, c: hull, p: [0, 0.5, l * 0.55], r: [Math.PI / 2, 0, 0], s: [w * 0.55, 1.1, 0.7] });
+    p.push({ g: P.box, c: COL.woodDark, p: [0, 0.18, 0], s: [w * 0.9, 0.14, l * 0.96] });
+    // benches
+    for (const z of [-l * 0.22, l * 0.14]) p.push({ g: P.box, c: COL.plank, p: [0, 0.72, z], s: [w * 0.85, 0.12, 0.45] });
+    // oars
+    for (const sx of [-1, 1]) {
+      p.push({ g: P.cyl6, c: COL.wood, p: [sx * (w * 0.6), 0.78, -0.2], r: [0, 0, sx * 1.15], s: [0.1, 2.0, 0.1] });
+      p.push({ g: P.box, c: COL.woodDark, p: [sx * (w * 0.6 + 0.85), 0.42, -0.2], r: [0, 0, sx * 1.15], s: [0.14, 0.6, 0.34] });
+    }
+    if (level >= 2) {
+      p.push({ g: P.cyl6, c: COL.wood, p: [0, 1.9, -l * 0.1], s: [0.13, 2.6, 0.13] });
+      p.push({ g: P.box, c: COL.cloth, p: [0, 2.1, -l * 0.1 + 0.35], s: [0.06, 1.8, 1.5] });
+    }
+    if (level >= 3) p.push({ g: P.box, c: 0xd23b32, p: [0, 1.0, l * 0.3], s: [w * 0.7, 0.1, 0.5] });
+    const g = assemble(p);
+    g.userData.length = l;
+    return g;
+  };
+
+  M.car = function (level) {
+    const p = [];
+    const body = [0xc0392b, 0x2e6da4, 0x2f8f4e, 0xd9a520, 0x8e44ad][Math.min(4, level - 1)];
+    const l = 4.0, w = 2.0;
+    p.push({ g: P.box, c: body, p: [0, 0.72, 0], s: [w, 0.62, l] });
+    p.push({ g: P.box, c: body, p: [0, 1.22, -0.25], s: [w * 0.86, 0.55, l * 0.44] });
+    // glass
+    p.push({ g: P.box, c: COL.glass, p: [0, 1.24, -0.25 + l * 0.22], s: [w * 0.78, 0.42, 0.06] });
+    p.push({ g: P.box, c: COL.glass, p: [0, 1.24, -0.25 - l * 0.22], s: [w * 0.78, 0.42, 0.06] });
+    for (const sx of [-1, 1]) p.push({ g: P.box, c: COL.glass, p: [sx * w * 0.44, 1.24, -0.25], s: [0.06, 0.4, l * 0.4] });
+    // bumpers + lights
+    p.push({ g: P.box, c: COL.iron, p: [0, 0.55, l * 0.51], s: [w * 0.98, 0.22, 0.16] });
+    p.push({ g: P.box, c: COL.iron, p: [0, 0.55, -l * 0.51], s: [w * 0.98, 0.22, 0.16] });
+    for (const sx of [-1, 1]) {
+      p.push({ g: P.box, c: 0xfff0b0, glow: true, p: [sx * w * 0.32, 0.82, l * 0.5], s: [0.4, 0.24, 0.08] });
+      p.push({ g: P.box, c: 0xd23b32, glow: true, p: [sx * w * 0.32, 0.82, -l * 0.5], s: [0.34, 0.18, 0.08] });
+    }
+    // wheels
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+      p.push({
+        g: P.cyl, c: 0x232323, p: [sx * (w * 0.5 + 0.06), 0.42, sz * l * 0.3],
+        r: [0, 0, Math.PI / 2], s: [0.84, 0.26, 0.84]
+      });
+      p.push({
+        g: P.cyl, c: 0xb8b8b8, p: [sx * (w * 0.5 + 0.14), 0.42, sz * l * 0.3],
+        r: [0, 0, Math.PI / 2], s: [0.42, 0.1, 0.42]
+      });
+    }
+    if (level >= 3) {
+      p.push({ g: P.box, c: COL.iron, p: [0, 1.56, -0.25], s: [w * 0.7, 0.1, 1.0] });
+      p.push({ g: P.box, c: COL.woodDark, p: [0, 1.7, -0.25], s: [w * 0.62, 0.2, 0.85] });
+    }
+    if (level >= 4) p.push({ g: P.box, c: COL.gold, p: [0, 1.0, l * 0.47], s: [w * 0.5, 0.12, 0.1] });
+    if (level >= 5) for (const sx of [-1, 1]) {
+      p.push({ g: P.box, c: 0x9fd8e8, glow: true, p: [sx * w * 0.52, 0.5, 0], s: [0.06, 0.08, l * 0.7] });
+    }
+    return assemble(p);
+  };
+
+  /** rider on a horse — used by the recruiter expeditions */
+  M.horseRider = function (level) {
+    const g = new THREE.Group();
+    const p = [];
+    const coat = [0x6b4a2c, 0x3a2a1e, 0xd8c8a8, 0x8a8a8a, 0x1e1e1e][Math.min(4, level - 1)];
+    // horse body + neck + head
+    p.push({ g: P.ico, c: coat, p: [0, 1.05, 0], s: [0.85, 0.95, 2.0] });
+    p.push({ g: P.cyl6, c: coat, p: [0, 1.5, 0.75], r: [0.55, 0, 0], s: [0.42, 1.1, 0.42] });
+    p.push({ g: P.ico, c: coat, p: [0, 1.95, 1.15], s: [0.4, 0.42, 0.8] });
+    p.push({ g: P.box, c: 0x2a2a2a, p: [0, 1.85, 1.5], s: [0.26, 0.2, 0.22] });
+    for (const sx of [-1, 1]) p.push({ g: P.cone5, c: coat, p: [sx * 0.16, 2.2, 1.0], s: [0.14, 0.26, 0.14] });
+    // mane + tail
+    for (let i = 0; i < 4; i++) p.push({ g: P.box, c: 0x2a1c12, p: [0, 1.65 + i * 0.13, 0.95 - i * 0.2], s: [0.14, 0.26, 0.2] });
+    p.push({ g: P.cone5, c: 0x2a1c12, p: [0, 1.2, -1.05], r: [-0.6, 0, 0], s: [0.26, 0.9, 0.26] });
+    // saddle
+    p.push({ g: P.box, c: 0x6a3a1e, p: [0, 1.55, -0.1], s: [0.7, 0.16, 0.8] });
+    const horse = assemble(p);
+    g.add(horse);
+    // legs
+    const legGeo = merge([{ g: P.cyl6, c: coat, p: [0, -0.42, 0], s: [0.2, 0.92, 0.2] },
+    { g: P.box, c: 0x2a2a2a, p: [0, -0.86, 0.02], s: [0.24, 0.14, 0.28] }]);
+    const legs = [];
+    for (let i = 0; i < 4; i++) {
+      const m = new THREE.Mesh(legGeo, MAT.solid);
+      m.castShadow = true;
+      m.position.set((i % 2 ? 1 : -1) * 0.34, 1.0, (i < 2 ? 1 : -1) * 0.65);
+      m.userData.phase = (i % 2 ? 0 : Math.PI) + (i < 2 ? 0 : Math.PI);
+      g.add(m); legs.push(m);
+    }
+    g.userData.legs = legs;
+    // rider
+    const rider = M.humanoid({ shirt: 0x4a5a8a, pants: 0x3a3226, hat: 0x7a4a24 });
+    rider.position.set(0, 1.62, -0.1);
+    rider.scale.setScalar(0.9);
+    rider.userData.legL.rotation.x = -1.3;
+    rider.userData.legR.rotation.x = -1.3;
+    rider.userData.armL.rotation.x = -1.1;
+    rider.userData.armR.rotation.x = -1.1;
+    g.add(rider);
+    g.userData.rider = rider;
+    return g;
   };
 
   /* =========================================================

@@ -158,7 +158,20 @@ kbd{
 .qt-prog{height:5px;background:rgba(0,0,0,.5);border-radius:9px;overflow:hidden;margin-top:6px}
 .qt-prog i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--green),var(--gold));transition:width .3s}
 
-#keyhints{position:absolute;bottom:18px;left:14px;display:flex;flex-direction:column;gap:3px;font-size:11px;color:var(--muted);opacity:.75}
+/* Key hints sit over open terrain, so they get a light plate and black
+   text — grey-on-grass was unreadable. */
+#keyhints{position:absolute;bottom:18px;left:14px;display:flex;flex-direction:column;gap:4px;align-items:flex-start}
+#keyhints span{
+  display:flex;align-items:center;gap:5px;
+  font-size:11.5px;font-weight:700;color:#000;
+  background:rgba(255,255,255,.82);border:1px solid rgba(0,0,0,.28);
+  border-radius:7px;padding:2px 8px;line-height:1.55;
+  box-shadow:0 2px 6px rgba(0,0,0,.3);
+}
+#keyhints kbd{
+  background:linear-gradient(#fff,#dfe4e2);color:#000;
+  border-color:rgba(0,0,0,.4);border-bottom-color:rgba(0,0,0,.55);
+}
 
 /* ===================== BUILD BAR ===================== */
 #buildbar{
@@ -322,6 +335,31 @@ h3.sec{font-size:13px;color:var(--gold);margin:18px 0 10px;padding-bottom:6px;bo
 .st-stat b{display:block;font-size:15px;color:var(--gold)}
 .st-stat span{font-size:10.5px;color:var(--muted)}
 .st-actions{display:flex;gap:8px;flex-wrap:wrap}
+
+/* people / settlers panel */
+.pop-hero{display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:8px;margin-bottom:14px}
+.pop-cell{padding:10px;border-radius:12px;text-align:center;background:rgba(255,255,255,.05);border:1px solid var(--line)}
+.pop-cell b{display:block;font-size:19px;color:var(--gold)}
+.pop-cell span{font-size:10.5px;color:var(--muted)}
+.pop-cell.warn{border-color:rgba(255,90,90,.5);background:rgba(255,90,90,.1)}
+.pop-cell.warn b{color:var(--red)}
+.rider{display:flex;align-items:center;gap:11px;padding:11px 13px;border-radius:12px;margin-bottom:8px;
+  background:rgba(255,255,255,.04);border:1px solid var(--line);flex-wrap:wrap}
+.rider .ri{font-size:26px}
+.rider .rn{flex:1;min-width:130px;font-size:13px}
+.rider .rn small{display:block;color:var(--muted);font-size:10.5px;margin-top:3px;line-height:1.7}
+.rider .rbar{height:6px;background:rgba(0,0,0,.5);border-radius:9px;overflow:hidden;margin-top:6px}
+.rider .rbar i{display:block;height:100%;background:linear-gradient(90deg,var(--blue),var(--gold));transition:width .4s}
+.rider.away{border-color:rgba(77,196,255,.45);background:rgba(77,196,255,.08)}
+.veh{display:flex;align-items:center;gap:12px;padding:12px;border-radius:14px;margin-bottom:9px;
+  background:linear-gradient(160deg,rgba(255,255,255,.07),rgba(255,255,255,.02));border:1px solid var(--line);flex-wrap:wrap}
+.veh .vi{font-size:32px}
+.veh .vn{flex:1;min-width:150px}
+.veh .vn b{font-size:14px}
+.veh .vn small{display:block;color:var(--muted);font-size:11px;line-height:1.7;margin-top:3px}
+.veh .vbtns{display:flex;gap:6px;flex-wrap:wrap}
+.free-tag{background:linear-gradient(180deg,#3fa14a,#1f6b2c);color:#fff;font-size:10.5px;
+  padding:2px 8px;border-radius:99px;margin-right:6px}
 
 .menu-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
 .settings{display:flex;flex-direction:column;gap:11px;font-size:12.5px}

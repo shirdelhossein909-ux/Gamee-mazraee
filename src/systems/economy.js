@@ -83,6 +83,7 @@
     const got = g.inv.add(id, qty);
     if (!got) return false;
     g.inv.addCoins(-this.buyPrice(id) * got);
+    g.audio.coin();
     g.ui.toast('🛒 ' + U.fa(got) + '× ' + C.ITEMS[id].name + ' خریدی', 'good');
     return true;
   };
@@ -96,6 +97,7 @@
     g.inv.addCoins(total);
     g.progress.stat('sold', qty);
     g.progress.addXp(Math.max(1, Math.round(total / 30)));
+    g.audio.coin();
     g.ui.toast('💰 ' + U.fa(qty) + '× ' + C.ITEMS[id].name + ' فروختی (+' + U.fa(total) + ')', 'gold');
     return true;
   };
@@ -112,6 +114,7 @@
     if (!n) { g.ui.toast('چیزی برای فروش نیست', 'bad'); return; }
     g.inv.addCoins(total);
     g.progress.stat('sold', n);
+    g.audio.coin();
     g.ui.toast('💰 ' + U.fa(n) + ' قلم فروخته شد (+' + U.fa(total) + ' سکه)', 'gold');
   };
 
@@ -122,6 +125,7 @@
 
     const income = g.building ? g.building.dailyIncome() : 0;
     if (income > 0) g.inv.addCoins(income);
+    if (g.settlers) g.settlers.onNewDay();
 
     // townsfolk need feeding
     const pop = g.progress.population;

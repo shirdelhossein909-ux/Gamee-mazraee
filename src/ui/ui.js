@@ -106,6 +106,18 @@
     $('set-sens').oninput = function () { G.Input.sensitivity = +this.value; };
     $('set-shadow').onchange = function () { self.game.setShadows(this.checked); };
 
+    // audio
+    const vol = function (id, bus) {
+      const el = $(id);
+      if (!el) return;
+      el.oninput = function () { self.game.audio.setVolume(bus, +this.value); };
+    };
+    vol('set-vol-master', 'master');
+    vol('set-vol-music', 'music');
+    vol('set-vol-amb', 'ambient');
+    vol('set-vol-sfx', 'sfx');
+    if ($('set-sound')) $('set-sound').onchange = function () { self.game.audio.setEnabled(this.checked); };
+
     // hotbar slots
     this.buildHotbar();
   };
@@ -209,7 +221,7 @@
     e.weather.textContent = w.icon + ' ' + w.name;
     const tier = C.TIERS[prog.tier];
     e.tier.textContent = tier.icon + ' ' + tier.name;
-    e.pop.textContent = U.fa(prog.population);
+    e.pop.textContent = U.fa(prog.population) + (g.settlers ? '/' + U.fa(g.settlers.housing()) : '');
     e.happy.textContent = U.fa(prog.happiness) + '٪';
 
     if (this.dirtyRes) this.renderRes();
@@ -512,8 +524,10 @@
       case 'market': this.renderMarket(); break;
       case 'skills': this.renderSkills(); break;
       case 'quests': this.renderQuests(); break;
+      case 'people': this.renderPeople(); break;
       case 'structure': this.renderStructure(); break;
     }
+    if (this.game.audio) this.game.audio.click();
   };
 
   UI.prototype.closePanel = function (silent) {
@@ -763,6 +777,134 @@
         '<div class="qb"><i style="width:' + (done ? 100 : st.pct * 100) + '%"></i></div>' +
         '<div class="qr">پاداش: 💰 ' + U.fa(q.coin) + ' · ⭐ ' + U.fa(q.xp) + ' XP</div>';
       list.appendChild(d);
+    }
+  };
+
+  /* ---------------- people, riders & vehicles ---------------- */
+  UI.prototype.renderPeople = function () {
+    const g = this.game, self = this, S = g.settlers;
+    const housing = S.housing(), res = S.residents, homeless = S.homeless();
+
+    const cell = (v, l, warn) =>
+      '<div class="pop-cell' + (warn ? ' warn' : '') + '"><b>' + v + '</b><span>' + l + '</span></div>';
+    $('pop-hero').innerHTML =
+      cell(U.fa(S.population()), 'جمعیت فعال') +
+      cell(U.fa(res), 'ساکنان') +
+      cell(U.fa(housing), 'ظرفیت خانه‌ها') +
+      cell(U.fa(S.spareHomes()), 'خانهٔ خالی') +
+      cell(U.fa(g.progress.happiness) + '٪', 'شادی', g.progress.happiness < 50) +
+      (homeless ? cell(U.fa(homeless), 'بی‌خانمان', true) : '');
+
+    const acts = $('pop-actions');
+    acts.innerHTML = '';
+    const mk = (parent, label, cls, fn, dis) => {
+      const b = document.createElement('button');
+      b.className = 'btn ' + (cls || '');
+      b.innerHTML = label;
+      b.disabled = !!dis;
+      b.onclick = fn;
+      parent.appendChild(b);
+      return b;
+    };
+    const wc = S.workerCost();
+    mk(acts, '🧑‍🌾 استخدام کارگر — 💰 ' + U.fa(wc), 'primary',
+      function () { S.hireWorker(); self.renderPeople(); },
+      g.inv.coins < wc || S.spareHomes() < 1);
+
+    /* riders */
+    const maxR = S.maxRiders();
+    $('rider-note').innerHTML = maxR
+      ? 'اصطبل سطح ' + U.fa(maxR) + ' — تا ' + U.fa(maxR) + ' سوارکار می‌توانی داشته باشی.<br>' +
+      'هر سوارکار به سفر می‌رود و مردم بی‌پناه را به شهرت می‌آورد. سطح ۱: ' +
+      U.fa(C.SETTLERS.baseDays) + ' روز سفر و ۱ نفر · سطح ۵: حدود ' +
+      U.fa(C.SETTLERS.minDays) + ' روز و ۵ نفر در هر سفر.'
+      : '🔒 برای داشتن سوارکار اول یک <b>اصطبل</b> بساز (منوی ساخت‌وساز، دستهٔ شهری).';
+
+    const rl = $('rider-list');
+    rl.innerHTML = '';
+    if (!S.riders.length) {
+      rl.innerHTML = '<div style="color:var(--muted);font-size:12px">هنوز سوارکاری نداری</div>';
+    }
+    S.riders.forEach(function (r, i) {
+      const st = S.riderStat(r.level);
+      const away = r.state !== 'idle';
+      const d = document.createElement('div');
+      d.className = 'rider' + (away ? ' away' : '');
+      const pct = away ? U.clamp01(r.trip / Math.max(0.01, r.tripLen)) * 100 : 0;
+      d.innerHTML = '<span class="ri">🏇</span><span class="rn"><b>سوارکار ' + U.fa(i + 1) +
+        '</b> — سطح ' + U.fa(r.level) + '<small>هر سفر ' + U.fa(st.bring) + ' نفر · مدت ' +
+        U.fa(Math.round(st.days * 10) / 10) + ' روز</small>' +
+        (away ? '<small>در سفر… ' + U.fa(Math.round(pct)) + '٪ (' +
+          U.fa(Math.max(0, Math.round((r.tripLen - r.trip) * 10) / 10)) + ' روز مانده)</small>' +
+          '<span class="rbar"><i style="width:' + pct + '%"></i></span>' : '') +
+        '</span>';
+      const btns = document.createElement('span');
+      btns.className = 'vbtns';
+      d.appendChild(btns);
+      if (!away) {
+        const tc = C.SETTLERS.tripCost(r.level);
+        mk(btns, '🧭 اعزام', 'primary', function () { S.sendRider(r); self.renderPeople(); },
+          !g.inv.canAfford(tc) || S.spareHomes() < st.bring);
+        if (r.level < C.SETTLERS.riderMax) {
+          const uc = C.SETTLERS.riderUpgrade(r.level + 1);
+          mk(btns, '⬆️ ارتقا', 'gold', function () { S.upgradeRider(r); self.renderPeople(); },
+            !g.inv.canAfford(uc));
+        }
+      }
+      rl.appendChild(d);
+    });
+
+    const ra = $('rider-actions');
+    ra.innerHTML = '';
+    const rc = C.SETTLERS.riderCost(S.riders.length);
+    mk(ra, '🏇 استخدام سوارکار — 💰 ' + U.fa(rc.coin) + ' + 🌾' + U.fa(rc.fiber), 'primary',
+      function () { S.hireRider(); self.renderPeople(); },
+      maxR < 1 || S.riders.length >= maxR || !g.inv.canAfford(rc));
+    if (S.riders.some((r) => r.state === 'idle')) {
+      mk(ra, '🧭 اعزام همه', '', function () { S.sendAll(); self.renderPeople(); });
+    }
+
+    /* vehicles */
+    const vl = $('veh-list');
+    vl.innerHTML = '';
+    for (const id in C.VEHICLES) {
+      const def = C.VEHICLES[id];
+      const owned = g.vehicles.own(id);
+      const free = !Object.keys(def.cost).length;
+      let costHtml = free ? '<span class="free-tag">رایگان</span>' : '';
+      if (!owned) {
+        for (const k in def.cost) {
+          const have = k === 'coin' ? g.inv.coins : g.inv.count(k);
+          const icon = k === 'coin' ? '💰' : (C.ITEMS[k] ? C.ITEMS[k].icon : k);
+          costHtml += '<span style="color:' + (have >= def.cost[k] ? 'var(--green)' : 'var(--red)') +
+            ';margin-left:8px">' + icon + ' ' + U.fa(have) + '/' + U.fa(def.cost[k]) + '</span>';
+        }
+      }
+      const d = document.createElement('div');
+      d.className = 'veh';
+      d.innerHTML = '<span class="vi">' + def.icon + '</span><span class="vn"><b>' + def.name +
+        (owned ? ' — سطح ' + U.fa(owned.level) : '') + '</b><small>' + def.desc + '</small>' +
+        '<small>' + costHtml + '</small>' +
+        (owned ? '<small>سرعت: ' + U.fa(Math.round(def.stat(owned.level).speed)) + '</small>' : '') +
+        '</span>';
+      const btns = document.createElement('span');
+      btns.className = 'vbtns';
+      d.appendChild(btns);
+      if (!owned) {
+        mk(btns, free ? '🎁 دریافت رایگان' : '🛒 خرید', 'primary',
+          function () { g.vehicles.buy(id); self.renderPeople(); }, !g.inv.canAfford(def.cost));
+      } else {
+        mk(btns, '📍 فراخوانی', '', function () { g.vehicles.recall(id); self.closePanel(); });
+        mk(btns, '🔑 سوار شدن', 'primary', function () {
+          self.closePanel(); g.vehicles.mount(owned);
+        }, U.dist(g.player.pos.x, g.player.pos.z, owned.x, owned.z) > 7);
+        if (owned.level < def.max) {
+          const uc = def.upgrade(owned.level + 1);
+          mk(btns, '⬆️ ارتقا', 'gold', function () { g.vehicles.upgrade(id); self.renderPeople(); },
+            !g.inv.canAfford(uc));
+        }
+      }
+      vl.appendChild(d);
     }
   };
 

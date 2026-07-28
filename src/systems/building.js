@@ -270,6 +270,7 @@
     this.game.progress.addXp(12);
     this.game.progress.stat('build', 1);
     this.game.progress.stat('build_' + p.defId, 1);
+    this.game.audio.build();
     this.game.ui.toast('🏗️ ' + p.def.icon + ' ' + p.def.name + ' ساخته شد', 'good');
     this.game.fx.hitBurst(b.x, b.y + 1, b.z, 0xffd15c, 22);
 
@@ -296,7 +297,9 @@
       maxHp: def.hp ? def.hp(level) : 70 * level + 40,
       glow: []
     };
-    obj.traverse(function (o) { if (o.userData && o.userData.isGlow) b.glow.push(o); });
+    obj.traverse(function (o) {
+      if (o.userData && o.userData.isGlow) { o.material = M.MAT.window; b.glow.push(o); }
+    });
     this.list.push(b);
     this._index(b, true);
     this.invalidate();
@@ -330,6 +333,7 @@
     this.game.progress.addSkill('building', 10 + b.level * 5);
     this.game.progress.addXp(20);
     this.game.progress.stat('upgrade', 1);
+    this.game.audio.upgrade();
     this.game.ui.toast('⬆️ ' + b.def.name + ' به سطح ' + U.fa(b.level) + ' ارتقا یافت', 'gold');
     this.game.fx.hitBurst(b.x, b.y + 2, b.z, 0xffd15c, 26);
     this.game.bus.emit('build', b);
@@ -394,13 +398,16 @@
     b.hp -= dmg;
     b.hurt = 0.3;
     this.game.fx.hitBurst(b.x, b.y + 1, b.z, 0x8a6034, 6);
+    this.game.audio.hit();
     if (b.hp <= 0) {
+      this.game.audio.rockBreak();
       this.game.ui.toast('💥 ' + b.def.icon + ' ' + b.def.name + ' نابود شد!', 'bad');
       this.demolish(b, false);
       return true;
     }
     if (!this._warnT || U.now() - this._warnT > 6000) {
       this._warnT = U.now();
+      this.game.audio.alarm();
       this.game.ui.toast('⚠️ به ' + b.def.name + ' حمله شد!', 'bad');
     }
     return false;
@@ -412,7 +419,10 @@
   Building.prototype.update = function (dt) {
     const g = this.game;
     const hours = dt * (24 / C.TIME.dayLength);
-    const night = g.sky.isNight();
+    /* smooth dusk factor: window lights fade up instead of popping on */
+    const nightF = U.clamp01(g.sky.nightFactor * 1.25 - 0.15);
+    const night = nightF > 0.02;
+    M.MAT.window.opacity = nightF;
 
     for (const b of this.list) {
       /* animated parts */
@@ -422,7 +432,7 @@
         if (b.obj.userData.spinAxis === 'z') spin.rotation.z += dt * sp * 3;
         else spin.rotation.x += dt * sp;
       }
-      /* lit windows */
+      /* lit windows — opacity is driven by the shared material above */
       if (b.glow.length) for (const gm of b.glow) gm.visible = night;
 
       /* production */
@@ -454,6 +464,7 @@
           if (a) {
             b.towerCd = 1.0;
             g.wildlife.hit(a, eff.dps, b.x, b.z);
+            g.audio.bow();
             this._tracer(b.x, (b.obj.userData.top || 4) + b.y, b.z, a.x, a.y + 0.6, a.z);
           } else b.towerCd = 0.35;
         }
@@ -466,15 +477,16 @@
       }
     }
 
-    this._updateLights(night);
+    this._updateLights(night, nightF);
     this._updateTracers(dt);
 
     if (this.placing) this.updatePlacement();
   };
 
   /** assign the 6 pooled point lights to the closest lit structures */
-  Building.prototype._updateLights = function (night) {
+  Building.prototype._updateLights = function (night, nightF) {
     const p = this.game.player.pos;
+    if (nightF === undefined) nightF = 1;
     if (!night) {
       for (const l of this._lights) l.visible = false;
       return;
@@ -492,7 +504,7 @@
         const b = cand[i].b;
         const isLamp = b.defId === 'lamp';
         l.position.set(b.x, b.y + (isLamp ? 2.8 + b.level * 0.3 : 2.2), b.z);
-        l.intensity = isLamp ? 1.5 + b.level * 0.35 : 0.9;
+        l.intensity = (isLamp ? 1.5 + b.level * 0.35 : 0.9) * nightF;
         l.distance = isLamp ? 16 + b.level * 4 : 12;
         l.color.setHex(b.defId === 'smelter' ? 0xff7a2a : 0xffc069);
         l.visible = true;

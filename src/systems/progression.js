@@ -43,6 +43,7 @@
       p.hp = p.maxHp;
       p.maxStamina = C.PLAYER.stamina + (this.level - 1) * 5;
       p.stamina = p.maxStamina;
+      this.game.audio.levelUp();
       this.game.ui.levelUp('سطح ' + U.fa(this.level) + '!');
       need = C.playerXpNeeded(this.level);
     }
@@ -59,6 +60,7 @@
       s.xp -= need;
       s.level++;
       const def = C.SKILLS.filter((x) => x.id === id)[0];
+      this.game.audio.levelUp();
       this.game.ui.levelUp(def.icon + ' ' + def.name + ' سطح ' + U.fa(s.level));
       this.game.ui.toast(def.icon + ' مهارت ' + def.name + ' به سطح ' + U.fa(s.level) + ' رسید', 'gold');
       need = C.skillXpNeeded(s.level);
@@ -105,6 +107,7 @@
     this.game.inv.pay(chk.cost);
     this.tools[id] = this.toolLevel(id) + 1;
     const def = C.TOOLS[id];
+    this.game.audio.upgrade();
     this.game.ui.toast('🛠️ ' + def.icon + ' ' + def.name + ' به سطح ' + U.fa(this.tools[id]) + ' ارتقا یافت', 'gold');
     this.game.ui.levelUp(def.icon + ' ' + def.name + ' ' + U.fa(this.tools[id]));
     this.game.player.refreshTool();
@@ -120,10 +123,14 @@
 
   /* ===================== POPULATION / HAPPINESS ===================== */
   Progression.prototype.recalc = function () {
-    const b = this.game.building;
-    this.population = b ? Math.max(0, b.totalEffect('pop')) : 0;
+    const b = this.game.building, s = this.game.settlers;
+    /* houses are capacity, settlers are actual people — the town only
+       counts someone once they have both a home and a reason to stay */
+    this.housing = b ? Math.max(0, b.totalEffect('pop')) : 0;
+    this.population = s ? s.population() : this.housing;
     const happy = b ? b.totalEffect('happy') : 0;
-    this.happiness = Math.round(U.clamp(50 + happy + this.foodMood, 0, 100));
+    const crowding = s && s.homeless() > 0 ? -Math.min(25, s.homeless() * 4) : 0;
+    this.happiness = Math.round(U.clamp(50 + happy + this.foodMood + crowding, 0, 100));
   };
 
   /* ===================== TIERS ===================== */
@@ -150,6 +157,7 @@
     const n = p.next;
     if (p.have.pop >= n.pop && p.have.bld >= n.bld && p.have.hall >= n.hall) {
       this.tier++;
+      this.game.audio.quest();
       this.game.ui.levelUp(n.icon + ' ' + n.name + '!');
       this.game.ui.toast('🎉 آبادی تو به «' + n.name + '» ارتقا یافت! مرزها گسترش یافت.', 'gold');
       this.addXp(200 * this.tier);
@@ -197,6 +205,7 @@
     this.game.inv.addCoins(q.coin);
     if (q.item_r) for (const k in q.item_r) this.game.inv.add(k, q.item_r[k]);
     this.game.ui.toast('✅ مأموریت «' + q.name + '» کامل شد! +' + U.fa(q.coin) + ' سکه، +' + U.fa(q.xp) + ' XP', 'gold');
+    this.game.audio.quest();
     this.game.ui.levelUp('✅ ' + q.name);
   };
 

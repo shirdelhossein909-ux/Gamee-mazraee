@@ -404,6 +404,13 @@
   });
   C.BUILDINGS = B;
 
+  bld({
+    id: 'stable', name: 'اصطبل', icon: '🏇', cat: 'city', model: 'stable', size: [5, 4], max: 5, tier: 1, sk: 3,
+    desc: 'خانهٔ اسب‌ها و سوارکاران. هر سطح، جای یک سوارکار بیشتر می‌دهد تا برای آوردن مردم به سفر بروند.',
+    cost: (l) => Object.assign(scale({ wood: 45, stone: 20, fiber: 15 }, l), { coin: Math.round(180 * Math.pow(1.9, l - 1)) }),
+    effects: (l) => ({ happy: 2, riders: l })
+  });
+
   C.BUILD_CATS = [
     { id: 'farm', name: '🌾 مزرعه' },
     { id: 'home', name: '🏠 مسکونی' },
@@ -492,6 +499,42 @@
     { id: 'q20', name: 'شهر بزرگ', desc: 'به سطح شهر برس', type: 'tier', n: 4, xp: 1200, coin: 1500 },
     { id: 'q21', name: 'کلان‌شهر', desc: 'به سطح کلان‌شهر برس — پایان سفر', type: 'tier', n: 5, xp: 3000, coin: 5000 }
   ];
+
+  /* ===================== VEHICLES ===================== */
+  C.VEHICLES = {
+    boat: {
+      id: 'boat', name: 'قایق', icon: '⛵', max: 3, water: true, seat: 0.95,
+      desc: 'رایگان است! روی دریاچه‌ها و دریا حرکت کن و به جزیره‌ها و سواحل دوردست برو.',
+      needWhy: 'باید نزدیک آب باشی تا قایق را بیاورند',
+      cost: {},                                   // free, as promised
+      upgrade: (l) => ({ wood: 20 * l, plank: 6 * l, cloth: 2 * l, coin: 120 * l }),
+      stat: (l) => ({ speed: 8.5 + l * 2.6, accel: 2.4, turn: 2.6 })
+    },
+    car: {
+      id: 'car', name: 'خودرو', icon: '🚗', max: 5, water: false, seat: 1.15,
+      desc: 'سریع‌ترین راه برای گشتن دنیا روی خشکی. سطح بالاتر = سرعت و شتاب بیشتر.',
+      needWhy: 'جای صاف و خشکی برای پارک پیدا نشد',
+      cost: { coin: 2500, iron: 25, plank: 20, gold: 3 },
+      upgrade: (l) => ({ coin: 900 * l, iron: 12 * l, gold: 2 * l, plank: 8 * l }),
+      stat: (l) => ({ speed: 15 + l * 3.4, accel: 4 + l * 0.5, turn: 3.4 })
+    }
+  };
+
+  /* ===================== SETTLERS ===================== */
+  C.SETTLERS = {
+    start: 2,
+    workerBase: 130,
+    workerGrowth: 1.075,          // each hire costs a bit more
+    immigrationRate: 0.4,         // share of empty homes filled per day
+    minHappy: 50,
+    riderMax: 5,
+    baseDays: 7,                  // level 1: a full week away
+    daysPerLevel: 1.35,           // level 5: about 1.6 days
+    minDays: 1.5,
+    riderCost: (owned) => ({ coin: Math.round(700 * Math.pow(1.7, owned)), fiber: 20 + owned * 10 }),
+    riderUpgrade: (lvl) => ({ coin: Math.round(600 * Math.pow(1.85, lvl - 2)), wheat: 15 * lvl, iron: 4 * lvl }),
+    tripCost: (lvl) => ({ bread: Math.max(1, 3 - Math.floor(lvl / 2)), coin: 60 + lvl * 20 })
+  };
 
   /* ===================== STARTING STATE ===================== */
   C.START = {

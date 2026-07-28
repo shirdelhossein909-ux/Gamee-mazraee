@@ -68,6 +68,7 @@
      ========================================================= */
   function Game() {
     this.bus = new U.Bus();
+    this.audio = new G.Audio(this);
     this.started = false;
     this.paused = false;
     this.quality = 'mid';
@@ -116,6 +117,10 @@
       cont.textContent = '▶ ادامه بازی (روز ' + U.fa(save.day) + ' — ' + C.TIERS[save.tier || 0].name + ')';
       cont.onclick = function () { self.start(G.SaveSystem.load()); };
     }
+    const unlock = function () { self.audio.resume(); };
+    addEventListener('pointerdown', unlock, { passive: true });
+    addEventListener('keydown', unlock);
+
     document.getElementById('btn-new').onclick = function () {
       const raw = document.getElementById('seed-input').value.trim();
       const seed = raw ? U.strSeed(raw) : (Math.random() * 2147483647) | 0;
@@ -194,8 +199,10 @@
     this.player = new G.Player(this);
     this.farming = new G.Farming(this);
     this.building = new G.Building(this);
+    this.settlers = new G.Settlers(this);
     this.wildlife = new G.Wildlife(this);
     this.villagers = new G.Villagers(this);
+    this.vehicles = new G.Vehicles(this);
     this.economy = new G.Economy(this);
     this.gather = new G.Gathering(this);
     this.ui = new G.UI(this);
@@ -243,6 +250,9 @@
     if (this.world) this.world.dispose();
     if (this.wildlife) this.wildlife.clear();
     if (this.villagers) this.villagers.clear();
+    if (this.vehicles) this.vehicles.clear();
+    if (this.settlers) this.settlers.clear();
+    if (this.audio) this.audio.engineStop();
     if (this.building) {
       while (this.building.list.length) this.building.demolish(this.building.list[0], false);
     }
@@ -268,6 +278,7 @@
 
   Game.prototype._respawn = function () {
     const p = this.player;
+    if (this.vehicles.mounted) this.vehicles.dismount();
     p.hp = p.maxHp * 0.5;
     p.energy = Math.max(20, p.energy);
     const loss = Math.floor(this.inv.coins * 0.1);
@@ -312,12 +323,14 @@
     if (IN.pressed('KeyM')) ui.openPanel('market');
     if (IN.pressed('KeyK')) ui.openPanel('skills');
     if (IN.pressed('KeyQ')) ui.openPanel('quests');
+    if (IN.pressed('KeyP')) ui.openPanel('people');
     if (IN.pressed('Escape')) {
       if (this.building.placing) this.building.cancel();
       else if (ui.anyPanelOpen()) ui.closePanel();
       else ui.openPanel('menu');
     }
     if (IN.pressed('KeyF')) { if (IN.locked) IN.unlock(); else IN.lock(); }
+    if (IN.gpressed('KeyV') && !this.building.placing) this.vehicles.toggle();
 
     if (!IN.enabled) return;
 
@@ -348,6 +361,7 @@
     /* left click */
     if (IN.clicked(0)) {
       if (this.building.placing) this.building.confirm();
+      else if (this.player.mount) { /* hands are on the wheel */ }
       else {
         ui.swingSlot();
         this.gather.use(ui.currentTool());
@@ -380,11 +394,13 @@
   Game.prototype.update = function (dt) {
     this._input(dt);
 
+    this.vehicles.update(dt);
     this.player.update(dt);
     this.world.update(dt, this.player.pos.x, this.player.pos.z);
     this.sky.update(dt, this.player.pos);
     this.wildlife.update(dt);
     this.villagers.update(dt);
+    this.settlers.update(dt);
     this.farming.update(dt);
     this.building.update(dt);
     this.progress.update(dt);
@@ -392,6 +408,7 @@
     if (!this.building.placing) this.gather.pickTarget();
     this.gather.update(dt);
     this.fx.update(dt);
+    this.audio.update(dt);
     this.ui.update(dt);
 
     this._autosave += dt;

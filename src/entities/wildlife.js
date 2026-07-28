@@ -132,7 +132,10 @@
         wantX = pdx; wantZ = pdz; speed *= 1.0;
         if (pd < 1.9 + def.size && a.attackCd <= 0) {
           a.attackCd = 1.25;
-          if (player.damage(def.dmg, a.x, a.z)) this.game.ui.toast('💢 ' + def.name + ' حمله کرد!', 'bad');
+          if (player.damage(def.dmg, a.x, a.z)) {
+            this.game.audio.beast(def.size > 1.2);
+            this.game.ui.toast('💢 ' + def.name + ' حمله کرد!', 'bad');
+          }
           a.swing = 0.4;
         }
         break;
@@ -265,8 +268,13 @@
       a.x += (dx / l) * 0.55; a.z += (dz / l) * 0.55;
     }
     this.game.fx.hitBurst(a.x, a.y + a.def.size * 0.6, a.z, 0xd83a3a, 8);
-    if (a.hp <= 0) this._kill(a);
-    else this.game.ui.damageNumber(a.obj, Math.round(dmg));
+    this.game.audio.hit();
+    if (a.hp <= 0) {
+      this._kill(a);
+    } else {
+      this.game.audio.beast(a.def.size > 1.2);
+      this.game.ui.damageNumber(a.obj, Math.round(dmg));
+    }
   };
 
   Wildlife.prototype._kill = function (a) {
@@ -288,6 +296,8 @@
     prog.stat('hunt', 1);
     prog.stat('kill_' + a.type, 1);
     this.game.fx.hitBurst(a.x, a.y + 0.5, a.z, 0xffc94d, 16);
+    this.game.audio.beast(a.def.size > 1.2);
+    this.game.audio.coin();
     let msg = '🎯 ' + a.def.name + ' شکار شد';
     if (got.length) msg += ' — ' + got.map((g) => C.ITEMS[g.id].icon + U.fa(g.n)).join(' ');
     this.game.ui.toast(msg, 'good');
