@@ -194,6 +194,8 @@
 
   Game.prototype._buildSystems = function () {
     this.bus = new U.Bus();          // fresh bus: restarts must not stack listeners
+    this.markers = [];               // map waypoints
+    this.markerSeq = 0;
     this.inv = new G.Inventory(this);
     this.progress = new G.Progression(this);
     this.player = new G.Player(this);
@@ -263,6 +265,7 @@
       this.farming.plots.clear();
     }
     if (this.ui) {
+      if (this.ui.map) this.ui.closeMap();
       this.ui.closePanel(true);
       for (const f of this.ui.floaters) f.el.remove();
       this.ui.floaters.length = 0;
@@ -324,8 +327,10 @@
     if (IN.pressed('KeyK')) ui.openPanel('skills');
     if (IN.pressed('KeyQ')) ui.openPanel('quests');
     if (IN.pressed('KeyP')) ui.openPanel('people');
+    if (IN.pressed('KeyN')) ui.toggleMap();
     if (IN.pressed('Escape')) {
-      if (this.building.placing) this.building.cancel();
+      if (this.ui.map && this.ui.map.open) this.ui.closeMap();
+      else if (this.building.placing) this.building.cancel();
       else if (ui.anyPanelOpen()) ui.closePanel();
       else ui.openPanel('menu');
     }

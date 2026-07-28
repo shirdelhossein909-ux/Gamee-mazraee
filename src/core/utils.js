@@ -150,8 +150,9 @@
   /** 1234 -> 1.2K  */
   U.short = function (n) {
     n = Math.floor(n);
-    if (n >= 1e6) return (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'M';
-    if (n >= 1e4) return (n / 1e3).toFixed(1).replace(/\.0$/, '') + 'K';
+    // rounding thresholds, so 999,999 shows as 1M rather than 1000K
+    if (n >= 999500) return (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'M';
+    if (n >= 9995) return (n / 1e3).toFixed(1).replace(/\.0$/, '') + 'K';
     return '' + n;
   };
   U.faTime = function (h, m) { return U.fa(U.pad2(h) + ':' + U.pad2(m)); };

@@ -86,8 +86,8 @@
       </div>
     </div>
 
-    <!-- crosshair + target -->
-    <div id="crosshair"><div class="ch-dot"></div></div>
+    <!-- target label (no crosshair dot — targeting is forgiving) -->
+    <div id="crosshair"></div>
     <div id="target-info" class="hidden">
       <div id="ti-name">—</div>
       <div id="ti-bar"><i></i></div>
@@ -104,11 +104,14 @@
       <div class="qt-prog"><i id="qt-fill"></i></div>
     </div>
 
-    <!-- keys hint -->
-    <div id="keyhints">
-      <span><kbd>I</kbd> کوله</span><span><kbd>B</kbd> ساخت</span><span><kbd>M</kbd> بازار</span>
-      <span><kbd>K</kbd> مهارت</span><span><kbd>Q</kbd> مأموریت</span><span><kbd>P</kbd> اهالی</span>
-      <span><kbd>V</kbd> سوار/پیاده</span><span><kbd>ESC</kbd> منو</span>
+    <!-- keys hint (collapsible drawer) -->
+    <div id="keyhints-wrap">
+      <button id="keyhints-toggle" title="راهنمای کلیدها">⌨️ <span id="kh-arrow">▾</span></button>
+      <div id="keyhints">
+        <span><kbd>I</kbd> کوله</span><span><kbd>B</kbd> ساخت</span><span><kbd>M</kbd> بازار</span>
+        <span><kbd>K</kbd> مهارت</span><span><kbd>Q</kbd> مأموریت</span><span><kbd>P</kbd> اهالی</span>
+        <span><kbd>N</kbd> نقشه</span><span><kbd>V</kbd> سوار/پیاده</span><span><kbd>ESC</kbd> منو</span>
+      </div>
     </div>
   </div>
 
@@ -267,6 +270,40 @@
         </div>
       </div>
     </section>
+  </div>
+
+  <!-- ================= WORLD MAP ================= -->
+  <div id="worldmap" class="hidden">
+    <div class="wm-bar">
+      <div class="wm-title">🗺️ نقشهٔ جهان</div>
+      <div class="wm-tools">
+        <button class="btn" id="wm-center">🎯 روی من</button>
+        <button class="btn" id="wm-home">🏠 روستا</button>
+        <button class="btn" id="wm-zin">＋</button>
+        <button class="btn" id="wm-zout">－</button>
+        <button class="btn" id="wm-clear">🗑️ پاک‌کردن نشان‌ها</button>
+        <button class="btn danger" id="wm-close">✕</button>
+      </div>
+    </div>
+    <canvas id="wm-canvas"></canvas>
+    <div class="wm-foot">
+      <span id="wm-info">—</span>
+      <span class="wm-help">
+        <kbd>کشیدن با ماوس</kbd> جابه‌جایی ·
+        <kbd>چرخ ماوس</kbd> زوم ·
+        <kbd>کلیک چپ</kbd> نشان‌گذاری ·
+        <kbd>کلیک راست</kbd> حذف نشان ·
+        <kbd>N</kbd>/<kbd>ESC</kbd> بستن
+      </span>
+    </div>
+    <div id="wm-legend">
+      <span><i style="background:#e8d9a0"></i> مسکونی</span>
+      <span><i style="background:#a8d8f0"></i> شهری</span>
+      <span><i style="background:#d0743a"></i> دفاعی</span>
+      <span><i style="background:#6b4d31"></i> مزرعه</span>
+      <span><i style="background:#ff5a5a"></i> حیوان مهاجم</span>
+      <span><i style="background:#ffd15c"></i> نشان تو</span>
+    </div>
   </div>
 
   <div id="toasts"></div>

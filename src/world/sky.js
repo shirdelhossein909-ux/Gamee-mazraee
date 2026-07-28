@@ -112,8 +112,8 @@
     this.sunDisc.frustumCulled = false;
     this.group.add(this.sunDisc);
 
-    const moonMat = new THREE.MeshBasicMaterial({ color: 0xe8eef8, fog: false, transparent: true });
-    this.moonDisc = new THREE.Mesh(new THREE.SphereGeometry(8, 12, 10), moonMat);
+    const moonMat = new THREE.MeshBasicMaterial({ color: 0xf6f9ff, fog: false, transparent: true });
+    this.moonDisc = new THREE.Mesh(new THREE.SphereGeometry(11, 12, 10), moonMat);
     this.moonDisc.frustumCulled = false;
     this.group.add(this.moonDisc);
   };
@@ -254,7 +254,7 @@
 
     // clouds drift with the wind
     if (this.clouds) {
-      const spd = this.weather === 'storm' ? 5.5 : 1.8;
+      const spd = this.weather === 'storm' ? 4.2 : 1.8;
       this.clouds.position.x += Math.cos(this._windAngle) * spd * dt;
       this.clouds.position.z += Math.sin(this._windAngle) * spd * dt;
       if (player) {
@@ -267,14 +267,24 @@
     // lightning
     if (this.weather === 'storm') {
       this._flash -= dt;
-      if (this._flash < -0.2 && Math.random() < dt * 0.25) this._flash = 0.18;
+      if (this._flash < -0.2 && Math.random() < dt * 0.12) this._flash = 0.16;
     } else this._flash = -1;
+  };
+
+  /* The sun's arc is warped so daylight lasts dayStart→dayEnd (16h) and night
+     the remaining 8h — a plain sine would always give an even 12/12 split. */
+  const DAY_SPAN = T.dayEnd - T.dayStart;
+  const NIGHT_SPAN = 24 - DAY_SPAN;
+  Sky.prototype.sunAngle = function (h) {
+    if (h >= T.dayStart && h < T.dayEnd) return ((h - T.dayStart) / DAY_SPAN) * Math.PI;
+    const t = h < T.dayStart ? (h + 24 - T.dayEnd) : (h - T.dayEnd);
+    return Math.PI + (t / NIGHT_SPAN) * Math.PI;
   };
 
   Sky.prototype.apply = function (player) {
     const t = this.time;
     const w = C.WEATHER[this.weather];
-    const a = ((t.hours - 6) / 24) * U.PI2;
+    const a = this.sunAngle(t.hours);
     const sy = Math.sin(a), sx = Math.cos(a);
 
     // 0 at night, 1 at midday — every colour below blends on these two
@@ -306,19 +316,19 @@
        almost to nothing across the crossover hides the swap completely —
        ambient and hemisphere light carry the scene for those few seconds. */
     const dip = 0.05 + 0.95 * U.smoothstep(0, 0.17, Math.abs(sy));
-    this.sun.intensity = U.lerp(0.30, 0.35 + day * 0.95, dayF) * lightMul * dip + flash;
-    mixHex(this.sun.color, 0x93b4e8, 0xfff3dc, dayF);
+    this.sun.intensity = U.lerp(0.62, 0.35 + day * 0.95, dayF) * lightMul * dip + flash;
+    mixHex(this.sun.color, 0xb6cdf4, 0xfff3dc, dayF);
     this.sun.color.lerp(tmpHex(0xffb072), golden * 0.85);
 
-    this.hemi.intensity = (0.22 + day * 0.42) * lightMul + flash * 0.5;
-    mixHex(this.hemi.color, 0x2b3f66, 0xbfd8f0, dayF);
-    mixHex(this.hemi.groundColor, 0x1a2118, 0x53603c, dayF);
-    this.ambient.intensity = (0.14 + day * 0.16) * lightMul + flash * 0.4;
-    mixHex(this.ambient.color, 0x5f7ab0, 0xffffff, dayF);
+    this.hemi.intensity = (0.46 + day * 0.34) * lightMul + flash * 0.5;
+    mixHex(this.hemi.color, 0x51689a, 0xbfd8f0, dayF);
+    mixHex(this.hemi.groundColor, 0x36402f, 0x53603c, dayF);
+    this.ambient.intensity = (0.30 + day * 0.06) * lightMul + flash * 0.4;
+    mixHex(this.ambient.color, 0x8fa6d6, 0xffffff, dayF);
 
     // sky gradient
     const c = this.uni;
-    const nightTop = 0x060a18, nightMid = 0x111d38, nightBot = 0x22304f;
+    const nightTop = 0x111a34, nightMid = 0x24355c, nightBot = 0x3d5074;
     const dayTop = 0x2f6fc8, dayMid = 0x86bde8, dayBot = 0xc9e3f3;
     const duskTop = 0x2b3f78, duskMid = 0xa85a6a, duskBot = 0xe8964a;
     mixHex(c.top.value, nightTop, dayTop, day);
@@ -400,12 +410,14 @@
   };
 
   /* helpers used by the rest of the game */
-  Sky.prototype.isNight = function () { return this.time.hours < T.sunrise - 0.5 || this.time.hours > T.sunset + 0.5; };
+  Sky.prototype.isNight = function () {
+    return this.time.hours < T.dayStart + 0.6 || this.time.hours > T.dayEnd - 0.6;
+  };
   Sky.prototype.phaseIcon = function () {
     const h = this.time.hours;
     if (h < T.dawn) return '🌙';
-    if (h < T.sunrise + 0.5) return '🌅';
-    if (h < T.sunset - 1) return '☀️';
+    if (h < T.sunrise + 1.2) return '🌅';
+    if (h < T.sunset - 1.2) return '☀️';
     if (h < T.dusk) return '🌇';
     return '🌙';
   };

@@ -24,9 +24,13 @@
   /* ===================== TIME ===================== */
   C.TIME = {
     dayLength: 720,       // real seconds for a full 24h cycle
-    startHour: 7,
+    startHour: 8,
     daysPerSeason: 7,
-    dawn: 5.5, sunrise: 7, sunset: 19, dusk: 20.5
+    /* Daylight runs 04:00 → 20:00 and night 20:00 → 04:00, so the day is
+       exactly twice as long as the night. sky.js warps the sun's arc to
+       match instead of the plain 12/12 split a raw sine would give. */
+    dayStart: 4, dayEnd: 20,
+    dawn: 3.6, sunrise: 4.8, sunset: 19.2, dusk: 20.6
   };
 
   C.SEASONS = [
@@ -528,9 +532,9 @@
     immigrationRate: 0.4,         // share of empty homes filled per day
     minHappy: 50,
     riderMax: 5,
-    baseDays: 7,                  // level 1: a full week away
-    daysPerLevel: 1.35,           // level 5: about 1.6 days
-    minDays: 1.5,
+    baseDays: 3.5,                // level 1
+    daysPerLevel: 0.675,          // level 5: under a day
+    minDays: 0.75,
     riderCost: (owned) => ({ coin: Math.round(700 * Math.pow(1.7, owned)), fiber: 20 + owned * 10 }),
     riderUpgrade: (lvl) => ({ coin: Math.round(600 * Math.pow(1.85, lvl - 2)), wheat: 15 * lvl, iron: 4 * lvl }),
     tripCost: (lvl) => ({ bread: Math.max(1, 3 - Math.floor(lvl / 2)), coin: 60 + lvl * 20 })

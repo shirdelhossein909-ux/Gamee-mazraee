@@ -206,9 +206,9 @@
     const ctx = this.ctx;
     const lfo = ctx.createOscillator();
     lfo.type = 'sine';
-    lfo.frequency.value = 0.09;
+    lfo.frequency.value = 0.055;
     const lfoGain = ctx.createGain();
-    lfoGain.gain.value = 260;
+    lfoGain.gain.value = 130;
     lfo.connect(lfoGain);
     lfoGain.connect(this.wind.filter.frequency);
     lfo.start();
@@ -287,16 +287,17 @@
 
     /* wind: stronger in storms and up on the mountains */
     const alt = U.clamp01((p.pos.y - 8) / 40);
-    let windLvl = 0.05 + alt * 0.1;
-    if (w === 'cloudy') windLvl += 0.05;
-    if (w === 'rain') windLvl += 0.07;
-    if (w === 'snow') windLvl += 0.06;
-    if (stormy) windLvl += 0.2;
-    _ramp(this.wind.gain.gain, windLvl * 0.9, ctx, 1.4);
-    _ramp(this.wind.filter.frequency, stormy ? 700 : 400, ctx, 1.6);
+    let windLvl = 0.05 + alt * 0.08;
+    if (w === 'cloudy') windLvl += 0.035;
+    if (w === 'rain') windLvl += 0.045;
+    if (w === 'snow') windLvl += 0.04;
+    if (stormy) windLvl += 0.075;
+    _ramp(this.wind.gain.gain, windLvl * 0.75, ctx, 2.2);
+    // keep the storm dark and rumbling rather than a harsh hiss
+    _ramp(this.wind.filter.frequency, stormy ? 300 : 380, ctx, 2.4);
 
     /* rain hiss */
-    const rainLvl = w === 'rain' ? 0.1 : stormy ? 0.17 : w === 'snow' ? 0.02 : 0;
+    const rainLvl = w === 'rain' ? 0.07 : stormy ? 0.10 : w === 'snow' ? 0.015 : 0;
     _ramp(this.rain.gain.gain, rainLvl, ctx, 1.2);
 
     /* water lapping when near a shore */
@@ -389,8 +390,8 @@
   };
 
   A.thunder = function () {
-    this.burst({ freq: 220, to: 45, q: 0.5, dur: 2.4, gain: 0.42, filter: 'lowpass', attack: 0.05, rate: 0.6, bus: this.busAmb });
-    this.tone({ freq: 58, to: 28, type: 'sine', dur: 1.9, gain: 0.3, attack: 0.06, bus: this.busAmb });
+    this.burst({ freq: 150, to: 40, q: 0.5, dur: 2.8, gain: 0.14, filter: 'lowpass', attack: 0.35, rate: 0.55, bus: this.busAmb });
+    this.tone({ freq: 52, to: 26, type: 'sine', dur: 2.2, gain: 0.16, attack: 0.3, bus: this.busAmb });
   };
 
   A.chop = function () {

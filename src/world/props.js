@@ -1230,16 +1230,6 @@
     return new THREE.Mesh(geo, bad ? MAT.ringBad : MAT.ring);
   };
 
-  M.territoryRing = function (radius) {
-    const geo = new THREE.RingGeometry(radius - 0.5, radius, 96);
-    geo.rotateX(-Math.PI / 2);
-    const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
-      color: 0xffd15c, transparent: true, opacity: 0.28, side: THREE.DoubleSide, depthWrite: false
-    }));
-    m.renderOrder = 2;
-    return m;
-  };
-
   /** simple particle burst pool (leaves, sparks, splashes) */
   M.burst = function (color, count) {
     const g = new THREE.BufferGeometry();

@@ -122,10 +122,8 @@ kbd{
 #mm-coords{position:absolute;bottom:9px;left:0;right:0;text-align:center;font-size:10px;color:#cfe;
   text-shadow:0 1px 3px #000;line-height:1;font-variant-numeric:tabular-nums}
 
-#crosshair{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none}
-.ch-dot{width:7px;height:7px;border-radius:99px;background:rgba(255,255,255,.85);
-  box-shadow:0 0 0 2px rgba(0,0,0,.5),0 0 10px rgba(255,255,255,.4);transition:transform var(--fast)}
-#crosshair.active .ch-dot{transform:scale(1.9);background:var(--gold)}
+/* No reticle dot: targeting is forgiving, so the aim label alone is enough. */
+#crosshair{position:absolute;top:50%;left:50%;width:0;height:0;pointer-events:none}
 
 #target-info{
   position:absolute;top:calc(50% + 26px);left:50%;transform:translateX(-50%);
@@ -159,8 +157,22 @@ kbd{
 .qt-prog i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--green),var(--gold));transition:width .3s}
 
 /* Key hints sit over open terrain, so they get a light plate and black
-   text — grey-on-grass was unreadable. */
-#keyhints{position:absolute;bottom:18px;left:14px;display:flex;flex-direction:column;gap:4px;align-items:flex-start}
+   text — grey-on-grass was unreadable. The list slides away on demand. */
+#keyhints-wrap{position:absolute;bottom:16px;left:14px;display:flex;flex-direction:column;
+  gap:6px;align-items:flex-start}
+#keyhints-toggle{
+  font-family:inherit;font-size:13px;cursor:pointer;color:#000;
+  background:rgba(255,255,255,.86);border:1px solid rgba(0,0,0,.3);
+  border-radius:9px;padding:4px 10px;box-shadow:0 2px 8px rgba(0,0,0,.35);
+  display:flex;align-items:center;gap:5px;transition:var(--fast);
+}
+#keyhints-toggle:hover{background:#fff;transform:translateY(-1px)}
+#kh-arrow{font-size:10px;transition:transform var(--fast)}
+#keyhints-wrap.closed #kh-arrow{transform:rotate(-90deg)}
+#keyhints{display:flex;flex-direction:column;gap:4px;align-items:flex-start;
+  max-height:340px;opacity:1;overflow:hidden;
+  transition:max-height .28s cubic-bezier(.4,0,.2,1),opacity .2s ease,transform .28s ease}
+#keyhints-wrap.closed #keyhints{max-height:0;opacity:0;transform:translateY(10px)}
 #keyhints span{
   display:flex;align-items:center;gap:5px;
   font-size:11.5px;font-weight:700;color:#000;
@@ -415,4 +427,44 @@ h3.sec{font-size:13px;color:var(--gold);margin:18px 0 10px;padding-bottom:6px;bo
 @media (max-width:560px){
   #resbar{display:none}
   .load-box h1,.menu-box h1{font-size:29px}
+}
+
+/* ===================== WORLD MAP ===================== */
+#worldmap{
+  position:absolute;inset:0;z-index:55;display:flex;flex-direction:column;
+  background:rgba(6,12,14,.93);backdrop-filter:blur(4px);animation:fade .18s ease;
+}
+.wm-bar{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
+  padding:12px 18px;border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg,rgba(255,255,255,.07),transparent);
+}
+.wm-title{font-size:17px;font-weight:700}
+.wm-tools{display:flex;gap:7px;flex-wrap:wrap}
+.wm-tools .btn{padding:7px 12px;font-size:12.5px}
+#wm-zin,#wm-zout{min-width:40px;font-size:16px;padding:5px 10px}
+#wm-canvas{flex:1;display:block;width:100%;min-height:0;cursor:grab;touch-action:none}
+#wm-canvas.dragging{cursor:grabbing}
+.wm-foot{
+  display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;
+  padding:9px 18px;border-top:1px solid var(--line);font-size:12px;color:var(--muted);
+}
+#wm-info{color:var(--gold);font-variant-numeric:tabular-nums}
+.wm-help kbd{font-size:11px}
+#wm-legend{
+  position:absolute;top:70px;right:18px;display:flex;flex-direction:column;gap:5px;
+  background:var(--glass);border:1px solid var(--line);border-radius:12px;padding:9px 12px;
+  font-size:11.5px;color:var(--ink);box-shadow:var(--shadow);pointer-events:none;
+}
+#wm-legend span{display:flex;align-items:center;gap:7px}
+#wm-legend i{width:11px;height:11px;border-radius:3px;display:block;border:1px solid rgba(0,0,0,.4)}
+
+/* waypoint arrow on the minimap */
+#mm-wp{position:absolute;top:6px;left:0;right:0;text-align:center;font-size:10px;
+  color:var(--gold);text-shadow:0 1px 3px #000;line-height:1;pointer-events:none}
+
+@media (max-width:700px){
+  #wm-legend{display:none}
+  .wm-help{display:none}
+  .wm-tools .btn{padding:6px 9px;font-size:11.5px}
 }

@@ -19,7 +19,6 @@
     this.placing = null;
     this.uid = 1;
     this.centerX = 0; this.centerZ = 0;
-    this.borderRing = null;
     this._lights = [];
     this._effCache = null;
     this._towerT = 0;
@@ -134,11 +133,6 @@
     return false;
   };
 
-  Building.prototype.borderRadius = function () {
-    const tier = C.TIERS[this.game.progress.tier];
-    return tier.border + this.totalEffect('border');
-  };
-
   /* =========================================================
      PLACEMENT
      ========================================================= */
@@ -188,8 +182,8 @@
     const fp = footprint(def, rot);
     const world = this.game.world;
 
-    if (U.dist(0, 0, x, z) > this.borderRadius()) return { ok: false, why: 'خارج از مرز شهر' };
-
+    /* No territory limit: build anywhere in the world you like. Only the
+       ground itself has an opinion — water, cliffs and things in the way. */
     const f = world.footprint(x, z, fp.w, fp.d, 0);
     const needWater = !!def.water;
     let waterNear = false;
@@ -537,23 +531,8 @@
   /* =========================================================
      BORDER RING
      ========================================================= */
-  Building.prototype.showBorder = function (on) {
-    if (on) {
-      const r = this.borderRadius();
-      if (this.borderRing && this.borderRing.userData.r !== r) {
-        this.game.scene.remove(this.borderRing);
-        this.borderRing.geometry.dispose();
-        this.borderRing = null;
-      }
-      if (!this.borderRing) {
-        this.borderRing = M.territoryRing(r);
-        this.borderRing.userData.r = r;
-        this.game.scene.add(this.borderRing);
-      }
-      this.borderRing.visible = true;
-      this.borderRing.position.y = C.WORLD.baseHeight + 0.4;
-    } else if (this.borderRing) this.borderRing.visible = false;
-  };
+  /* Kept as a no-op: building is unrestricted, so there is no ring to draw. */
+  Building.prototype.showBorder = function () { };
 
   /* =========================================================
      DAILY INCOME

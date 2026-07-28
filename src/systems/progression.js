@@ -159,14 +159,9 @@
       this.tier++;
       this.game.audio.quest();
       this.game.ui.levelUp(n.icon + ' ' + n.name + '!');
-      this.game.ui.toast('🎉 آبادی تو به «' + n.name + '» ارتقا یافت! مرزها گسترش یافت.', 'gold');
+      this.game.ui.toast('🎉 آبادی تو به «' + n.name + '» ارتقا یافت!', 'gold');
       this.addXp(200 * this.tier);
       this.game.inv.addCoins(150 * this.tier);
-      if (this.game.building.borderRing) {
-        this.game.scene.remove(this.game.building.borderRing);
-        this.game.building.borderRing.geometry.dispose();
-        this.game.building.borderRing = null;
-      }
     }
   };
 

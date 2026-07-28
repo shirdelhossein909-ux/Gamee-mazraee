@@ -118,6 +118,17 @@
     vol('set-vol-sfx', 'sfx');
     if ($('set-sound')) $('set-sound').onchange = function () { self.game.audio.setEnabled(this.checked); };
 
+    // collapsible key-hint drawer
+    const wrap = $('keyhints-wrap');
+    $('keyhints-toggle').onclick = function () {
+      wrap.classList.toggle('closed');
+      try { localStorage.setItem('mz_hints', wrap.classList.contains('closed') ? '0' : '1'); } catch (e) { }
+      self.game.audio.click();
+    };
+    try { if (localStorage.getItem('mz_hints') === '0') wrap.classList.add('closed'); } catch (e) { }
+
+    this._initMap();
+
     // hotbar slots
     this.buildHotbar();
   };
@@ -236,6 +247,7 @@
       this._mmT = 0.35;
       this.drawMinimap();
     }
+    if (this.map && this.map.open) this.drawMap();
   };
 
   const RES_SHOW = ['wood', 'stone', 'coal', 'iron_ore', 'iron', 'gold_ore', 'gem', 'fiber', 'plank', 'brick'];
@@ -357,16 +369,22 @@
       ctx.fillStyle = (a.def.hostile || a.angry) ? '#ff5a5a' : '#9fe08a';
       ctx.fillRect(x - 1.5, z - 1.5, 3, 3);
     }
-    // town border
-    const r = g.building.borderRadius() * px;
-    const cx = toX(0), cz = toZ(0);
-    if (r < size * 2) {
-      ctx.strokeStyle = 'rgba(255,209,92,.55)';
-      ctx.lineWidth = 1.2;
+    // waypoints
+    for (const mk of g.markers) {
+      const x = toX(mk.x), z = toZ(mk.z);
+      const inside = x >= 4 && z >= 4 && x <= size - 4 && z <= size - 4;
+      const dx = x - size / 2, dz = z - size / 2;
+      const l = Math.hypot(dx, dz) || 1;
+      const ex = inside ? x : size / 2 + (dx / l) * (size / 2 - 8);
+      const ez = inside ? z : size / 2 + (dz / l) * (size / 2 - 8);
+      ctx.fillStyle = '#ffd15c';
+      ctx.strokeStyle = '#3a2600';
+      ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.arc(cx, cz, r, 0, 6.283);
-      ctx.stroke();
+      ctx.arc(ex, ez, inside ? 3.5 : 3, 0, 6.283);
+      ctx.fill(); ctx.stroke();
     }
+
     // player arrow
     ctx.save();
     ctx.translate(size / 2, size / 2);
@@ -389,7 +407,326 @@
     ctx.textAlign = 'center';
     ctx.fillText('N', size / 2, 12);
 
-    this.el.mmc.textContent = Math.round(p.x) + ' , ' + Math.round(p.z);
+    const wp = this.nearestMarker();
+    this.el.mmc.textContent = Math.round(p.x) + ' , ' + Math.round(p.z) +
+      (wp ? '   📍 ' + Math.round(wp.dist) + 'م' : '');
+  };
+
+  /* =========================================================
+     WORLD MAP — pan, zoom and waypoints
+     ========================================================= */
+  UI.prototype._initMap = function () {
+    const self = this, g = this.game;
+    const cv = $('wm-canvas');
+    this.map = {
+      el: $('worldmap'), cv: cv, ctx: cv.getContext('2d'),
+      cx: 0, cz: 0,               // world point at the centre of the view
+      scale: 1.6,                 // pixels per world unit
+      open: false, dirty: true,
+      drag: null, buf: null, bufKey: ''
+    };
+    const m = this.map;
+
+    const worldAt = (ev) => {
+      const r = cv.getBoundingClientRect();
+      return {
+        x: m.cx + (ev.clientX - r.left - r.width / 2) / m.scale,
+        z: m.cz + (ev.clientY - r.top - r.height / 2) / m.scale
+      };
+    };
+    this._mapWorldAt = worldAt;
+
+    cv.addEventListener('mousedown', function (ev) {
+      if (ev.button === 2) {                       // right click removes a marker
+        const w = worldAt(ev);
+        self.removeMarkerNear(w.x, w.z, 14 / m.scale);
+        ev.preventDefault();
+        return;
+      }
+      m.drag = { x: ev.clientX, y: ev.clientY, cx: m.cx, cz: m.cz, moved: 0 };
+      cv.classList.add('dragging');
+    });
+    addEventListener('mousemove', function (ev) {
+      if (!m.drag) return;
+      const dx = ev.clientX - m.drag.x, dy = ev.clientY - m.drag.y;
+      m.drag.moved = Math.max(m.drag.moved, Math.hypot(dx, dy));
+      m.cx = m.drag.cx - dx / m.scale;
+      m.cz = m.drag.cz - dy / m.scale;
+      m.dirty = true;
+    });
+    addEventListener('mouseup', function (ev) {
+      if (!m.drag) return;
+      const moved = m.drag.moved;
+      m.drag = null;
+      cv.classList.remove('dragging');
+      if (moved < 4 && m.open && ev.target === cv) {     // a click, not a pan
+        const w = worldAt(ev);
+        self.addMarker(w.x, w.z);
+      }
+    });
+    cv.addEventListener('contextmenu', (e) => e.preventDefault());
+    cv.addEventListener('wheel', function (ev) {
+      const before = worldAt(ev);
+      m.scale = U.clamp(m.scale * (ev.deltaY < 0 ? 1.22 : 1 / 1.22), 0.09, 14);
+      const after = worldAt(ev);
+      m.cx += before.x - after.x;                   // zoom toward the cursor
+      m.cz += before.z - after.z;
+      m.dirty = true;
+      ev.preventDefault();
+    }, { passive: false });
+
+    cv.addEventListener('mousemove', function (ev) {
+      if (m.drag) return;
+      const w = worldAt(ev);
+      const h = g.world.heightAt(w.x, w.z);
+      const b = C.BIOMES[g.world.biomeAt(w.x, w.z, h)];
+      $('wm-info').textContent = Math.round(w.x) + ' , ' + Math.round(w.z) +
+        '  ·  ' + b.name + '  ·  ارتفاع ' + Math.round(h);
+    });
+
+    $('wm-close').onclick = () => self.closeMap();
+    $('wm-center').onclick = function () {
+      m.cx = g.player.pos.x; m.cz = g.player.pos.z; m.dirty = true;
+    };
+    $('wm-home').onclick = function () {
+      const b = g.building;
+      m.cx = b.list.length ? b.centerX : 0;
+      m.cz = b.list.length ? b.centerZ : 0;
+      m.dirty = true;
+    };
+    $('wm-zin').onclick = function () { m.scale = U.clamp(m.scale * 1.35, 0.09, 14); m.dirty = true; };
+    $('wm-zout').onclick = function () { m.scale = U.clamp(m.scale / 1.35, 0.09, 14); m.dirty = true; };
+    $('wm-clear').onclick = function () {
+      g.markers.length = 0;
+      self.toast('🗑️ همهٔ نشان‌ها پاک شد', 'good');
+      m.dirty = true;
+    };
+    // clicking the minimap opens the big map
+    $('minimap-wrap').onclick = () => self.openMap();
+  };
+
+  UI.prototype.openMap = function () {
+    const m = this.map, g = this.game;
+    if (m.open) return;
+    this.closePanel(true);
+    m.open = true;
+    m.cx = g.player.pos.x; m.cz = g.player.pos.z;
+    m.dirty = true;
+    m.el.classList.remove('hidden');
+    G.Input.enabled = false;
+    G.Input.unlock();
+    this._resizeMap();
+    g.audio.click();
+  };
+
+  UI.prototype.closeMap = function () {
+    const m = this.map;
+    if (!m.open) return;
+    m.open = false;
+    m.el.classList.add('hidden');
+    G.Input.enabled = true;
+    if (this.game.started) G.Input.lock();
+  };
+
+  UI.prototype.toggleMap = function () {
+    if (this.map.open) this.closeMap(); else this.openMap();
+  };
+
+  UI.prototype._resizeMap = function () {
+    const m = this.map;
+    const r = m.cv.getBoundingClientRect();
+    const dpr = Math.min(devicePixelRatio || 1, 2);
+    const w = Math.max(64, Math.round(r.width)), h = Math.max(64, Math.round(r.height));
+    if (m.cv.width !== w * dpr || m.cv.height !== h * dpr) {
+      m.cv.width = w * dpr; m.cv.height = h * dpr;
+      m.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      m.dirty = true;
+    }
+    m.w = w; m.h = h;
+  };
+
+  /* markers ------------------------------------------------ */
+  UI.prototype.addMarker = function (x, z) {
+    const g = this.game;
+    if (g.markers.length >= 24) g.markers.shift();
+    g.markers.push({ x: x, z: z, n: ++g.markerSeq });
+    this.map.dirty = true;
+    g.audio.coin();
+    this.toast('📍 نشان ' + U.fa(g.markerSeq) + ' گذاشته شد', 'good');
+  };
+  UI.prototype.removeMarkerNear = function (x, z, radius) {
+    const g = this.game;
+    for (let i = g.markers.length - 1; i >= 0; i--) {
+      if (U.dist(x, z, g.markers[i].x, g.markers[i].z) <= radius) {
+        g.markers.splice(i, 1);
+        this.map.dirty = true;
+        g.audio.click();
+        return true;
+      }
+    }
+    return false;
+  };
+  UI.prototype.nearestMarker = function () {
+    const g = this.game, p = g.player.pos;
+    let best = null, bd = 1e18;
+    for (const mk of g.markers) {
+      const d = U.dist2(p.x, p.z, mk.x, mk.z);
+      if (d < bd) { bd = d; best = mk; }
+    }
+    return best ? { m: best, dist: Math.sqrt(bd) } : null;
+  };
+
+  /* drawing ------------------------------------------------ */
+  UI.prototype.drawMap = function () {
+    const m = this.map, g = this.game;
+    if (!m.open) return;
+    this._resizeMap();
+    const ctx = m.ctx, W = m.w, H = m.h;
+
+    /* terrain layer is expensive, so re-sample only when the view changed */
+    const key = Math.round(m.cx) + ':' + Math.round(m.cz) + ':' + m.scale.toFixed(3) + ':' + W + 'x' + H;
+    if (m.dirty || key !== m.bufKey) {
+      m.bufKey = key;
+      m.dirty = false;
+      const N = 190;                                  // sample grid width
+      const NH = Math.max(24, Math.round(N * H / W));
+      if (!m.buf) m.buf = document.createElement('canvas');
+      m.buf.width = N; m.buf.height = NH;
+      const b = m.buf.getContext('2d');
+      const img = b.createImageData(N, NH);
+      const d = img.data;
+      const stepX = (W / m.scale) / N, stepZ = (H / m.scale) / NH;
+      const x0 = m.cx - (W / m.scale) / 2, z0 = m.cz - (H / m.scale) / 2;
+      for (let iz = 0; iz < NH; iz++) {
+        for (let ix = 0; ix < N; ix++) {
+          const wx = x0 + ix * stepX, wz = z0 + iz * stepZ;
+          const h = g.world.heightAt(wx, wz);
+          let col;
+          if (h < C.WORLD.waterLevel) {
+            col = h < -6 ? 0x16405c : h < -2 ? 0x1f5b7d : 0x2e7fa8;
+          } else {
+            col = C.BIOMES[g.world.biomeAt(wx, wz, h)].c1;
+          }
+          // shade by slope so ridges and valleys read
+          const hx = g.world.heightAt(wx + stepX, wz);
+          const sh = U.clamp(0.82 + (h - hx) * 0.12, 0.5, 1.35);
+          const o = (iz * N + ix) * 4;
+          d[o] = Math.min(255, ((col >> 16) & 255) * sh);
+          d[o + 1] = Math.min(255, ((col >> 8) & 255) * sh);
+          d[o + 2] = Math.min(255, (col & 255) * sh);
+          d[o + 3] = 255;
+        }
+      }
+      b.putImageData(img, 0, 0);
+    }
+
+    ctx.imageSmoothingEnabled = m.scale < 3;
+    ctx.clearRect(0, 0, W, H);
+    ctx.drawImage(m.buf, 0, 0, W, H);
+
+    const toX = (wx) => W / 2 + (wx - m.cx) * m.scale;
+    const toZ = (wz) => H / 2 + (wz - m.cz) * m.scale;
+
+    /* grid every 100 units so distances are readable */
+    ctx.strokeStyle = 'rgba(255,255,255,.10)';
+    ctx.lineWidth = 1;
+    ctx.font = '10px sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,.45)';
+    const grid = m.scale > 2 ? 50 : m.scale > 0.6 ? 100 : m.scale > 0.25 ? 250 : 1000;
+    const gx0 = Math.ceil((m.cx - W / m.scale / 2) / grid) * grid;
+    for (let gx = gx0; gx < m.cx + W / m.scale / 2; gx += grid) {
+      const px = toX(gx);
+      ctx.beginPath(); ctx.moveTo(px, 0); ctx.lineTo(px, H); ctx.stroke();
+      ctx.fillText(gx, px + 3, 12);
+    }
+    const gz0 = Math.ceil((m.cz - H / m.scale / 2) / grid) * grid;
+    for (let gz = gz0; gz < m.cz + H / m.scale / 2; gz += grid) {
+      const pz = toZ(gz);
+      ctx.beginPath(); ctx.moveTo(0, pz); ctx.lineTo(W, pz); ctx.stroke();
+      ctx.fillText(gz, 3, pz - 3);
+    }
+
+    /* farm plots */
+    const ps = Math.max(1.5, C.WORLD.gridSize * m.scale);
+    g.farming.plots.forEach(function (pl) {
+      const x = toX(pl.x), z = toZ(pl.z);
+      if (x < -8 || z < -8 || x > W + 8 || z > H + 8) return;
+      ctx.fillStyle = pl.crop && pl.stage >= 3 ? '#ffd15c' : '#6b4d31';
+      ctx.fillRect(x - ps / 2, z - ps / 2, ps, ps);
+    });
+
+    /* buildings */
+    for (const b of g.building.list) {
+      const x = toX(b.x), z = toZ(b.z);
+      if (x < -20 || z < -20 || x > W + 20 || z > H + 20) continue;
+      ctx.fillStyle = b.def.cat === 'def' ? '#d0743a' : b.def.cat === 'home' ? '#e8d9a0'
+        : b.def.cat === 'farm' ? '#8fbf5c' : '#a8d8f0';
+      const w = Math.max(3, b.w * m.scale), d2 = Math.max(3, b.d * m.scale);
+      ctx.fillRect(x - w / 2, z - d2 / 2, w, d2);
+      if (m.scale > 2.2) {
+        ctx.fillStyle = 'rgba(0,0,0,.75)';
+        ctx.font = '11px sans-serif';
+        ctx.fillText(b.def.icon, x - 6, z + 4);
+      }
+    }
+
+    /* vehicles */
+    for (const v of g.vehicles.list) {
+      const x = toX(v.x), z = toZ(v.z);
+      if (x < 0 || z < 0 || x > W || z > H) continue;
+      ctx.font = '15px sans-serif';
+      ctx.fillText(v.def.icon, x - 8, z + 5);
+    }
+
+    /* animals */
+    for (const a of g.wildlife.animals) {
+      const x = toX(a.x), z = toZ(a.z);
+      if (x < 0 || z < 0 || x > W || z > H) continue;
+      ctx.fillStyle = (a.def.hostile || a.angry) ? '#ff5a5a' : '#9fe08a';
+      ctx.beginPath(); ctx.arc(x, z, 3, 0, 6.283); ctx.fill();
+    }
+
+    /* riders out on expedition */
+    for (const r of g.settlers.riders) {
+      if (r.state === 'idle' || r.state === 'away') continue;
+      const x = toX(r.x), z = toZ(r.z);
+      ctx.font = '15px sans-serif';
+      ctx.fillText('🏇', x - 8, z + 5);
+    }
+
+    /* waypoints */
+    for (const mk of g.markers) {
+      const x = toX(mk.x), z = toZ(mk.z);
+      if (x < -20 || z < -20 || x > W + 20 || z > H + 20) continue;
+      ctx.fillStyle = '#ffd15c';
+      ctx.strokeStyle = '#3a2600';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(x, z);
+      ctx.lineTo(x - 6, z - 14);
+      ctx.lineTo(x + 6, z - 14);
+      ctx.closePath();
+      ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.arc(x, z - 15, 6, 0, 6.283); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#3a2600';
+      ctx.font = 'bold 9px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(mk.n, x, z - 12);
+      ctx.textAlign = 'start';
+    }
+
+    /* the player */
+    const px = toX(g.player.pos.x), pz = toZ(g.player.pos.z);
+    ctx.save();
+    ctx.translate(px, pz);
+    ctx.rotate(-g.player.yaw + Math.PI);
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#111';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(0, -9); ctx.lineTo(7, 8); ctx.lineTo(0, 4); ctx.lineTo(-7, 8);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.restore();
   };
 
   /* =========================================================
