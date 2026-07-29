@@ -1,11 +1,11 @@
 @echo off
 chcp 65001 >nul
-title مزرعه و شهر
+title کشتور
 cd /d "%~dp0"
 
 echo.
 echo   ==========================================
-echo      MAZRAE ^& SHAHR   -   FARM ^& CITY
+echo             K E S H T V A R
 echo   ==========================================
 echo.
 

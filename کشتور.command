@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==========================================
-#    مزرعه و شهر  —  Farm & City
+#    کِشتوَر  —  Keshtvar
 #    Double-click to play (macOS / Linux)
 # ==========================================
 cd "$(dirname "$0")" || exit 1
@@ -9,7 +9,7 @@ PORT=8731
 
 echo
 echo "  =========================================="
-echo "     MAZRAE & SHAHR   -   FARM & CITY"
+echo "            K E S H T V A R"
 echo "  =========================================="
 echo
 

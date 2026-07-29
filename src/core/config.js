@@ -418,12 +418,13 @@
   });
 
   bld({
-    id: 'council', name: 'میز شورا', icon: '🪑', cat: 'city', model: 'council', size: [6, 5], max: 3, tier: 0, sk: 0,
-    desc: 'میز بزرگ قبیله. کنارش بایست و کلید E را بزن تا به هر کس وظیفه بدهی: چوب‌بری، سنگ‌کاری، شکار، کشاورزی یا نگهبانی.',
+    id: 'council', name: 'میز شورا', icon: '🪑', cat: 'city', model: 'council', size: [6, 5], max: 5, tier: 0, sk: 0,
+    desc: 'میز بزرگ قبیله. کنارش بایست و کلید E را بزن تا به هر کس وظیفه بدهی: چوب‌بری، سنگ‌کاری، شکار، کشاورزی یا نگهبانی. هر ارتقا جای کار بیشتری باز می‌کند.',
     /* deliberately one of the cheapest builds in the game — nothing else
-       matters until you can put people to work */
+       matters until you can put people to work. Slots are generous too: a
+       table that seats only a handful leaves most of your town loitering. */
     cost: (l) => scale({ wood: 12, fiber: 4 }, l, 1.6),
-    effects: (l) => ({ happy: 3, jobSlots: 2 + l * 2 })
+    effects: (l) => ({ happy: 3, jobSlots: 4 + l * 4 })
   });
 
   bld({
@@ -669,7 +670,10 @@
     { id: 'farm', name: 'کشاورز', icon: '🌾', desc: 'محصولات رسیده را خودش برداشت می‌کند.' },
     { id: 'guard', name: 'نگهبان', icon: '🛡️', desc: 'با کمان از شهر در برابر حیوانات مهاجم دفاع می‌کند.' }
   ];
-  C.JOB_TICK = 3.5;        // in-game hours between one worker's yields
+  /* In-game hours between one worker's deliveries. A day is twelve real
+     minutes, so this is about half a real minute — slow enough to matter,
+     fast enough that you can watch someone work and see it land. */
+  C.JOB_TICK = 1.1;
 
   /* ===================== STARTING STATE ===================== */
   C.START = {

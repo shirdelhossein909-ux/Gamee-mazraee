@@ -260,9 +260,14 @@
       if (!n) continue;
       html += '<div class="res"><span class="ic">' + C.ITEMS[id].icon + '</span><b>' + U.short(n) + '</b></div>';
     }
+    /* A full store silently swallows everything you and your workers gather,
+       which reads as "nothing works". Make it impossible to miss. */
     const cap = inv.capacity(), used = inv.used();
-    html += '<div class="res" style="width:100%;opacity:.75"><span class="ic">📦</span><b>' +
-      U.fa(used) + '/' + U.fa(cap) + '</b></div>';
+    const room = cap - used;
+    const cls = room <= 0 ? ' full' : room < cap * 0.12 ? ' nearfull' : '';
+    html += '<div class="res cap' + cls + '" style="width:100%"><span class="ic">📦</span><b>' +
+      U.fa(used) + '/' + U.fa(cap) + '</b>' +
+      (room <= 0 ? '<em>پر است! انبار بساز یا بفروش</em>' : '') + '</div>';
     this.el.res.innerHTML = html;
     this.dirtyRes = false;
   };
@@ -1195,13 +1200,73 @@
       cell(U.fa(used) + '/' + U.fa(cap), 'مشغول کار') +
       cell(U.fa(S.freeWorkers()), 'آزاد', S.freeWorkers() === 0 && cap > 0);
 
-    $('job-note').innerHTML = slots > 0
+    let note = slots > 0
       ? 'هر نفری که سر کار می‌گذاری خودش در دنیا راه می‌افتد و کارش را می‌کند: چوب‌بر می‌رود سراغ درخت، ' +
       'سنگ‌کار سراغ صخره، شکارچی دنبال حیوان، کشاورز محصول رسیده را برداشت می‌کند و نگهبان با کمان ' +
       'از شهر دفاع می‌کند. حاصل کارشان مستقیم به انبار تو اضافه می‌شود.<br>' +
-      'ظرفیت = کمترینِ (تعداد اهالی، ظرفیت میز شورا). میز را ارتقا بده تا بیشتر شود.'
+      'ظرفیت = کمترینِ (تعداد اهالی، ظرفیت میز شورا).'
       : '🔒 برای وظیفه‌دادن اول یک <b>میز شورا</b> بساز (منوی ساخت‌وساز → دستهٔ شهری). ' +
       'بعد کنار میز برو و کلید <kbd>E</kbd> را بزن.';
+
+    /* A full store is the single most common reason work seems to vanish:
+       people swing all day and nothing lands. Say it here, loudly. */
+    const room = g.inv.capacity() - g.inv.used();
+    if (slots > 0 && room <= 0) {
+      note = '<b style="color:var(--red)">📦 انبارت پر است — هر چه کارگرها بیاورند دور ریخته می‌شود!</b> ' +
+        'اول سیلو یا انبار بزرگ بساز یا در بازار جنس بفروش.<br>' + note;
+    } else if (slots > 0 && room < 25) {
+      note = '<b style="color:var(--gold)">📦 فقط ' + U.fa(room) + ' جای خالی در انبار مانده.</b><br>' + note;
+    }
+    $('job-note').innerHTML = note;
+
+    /* Upgrading the table is the whole answer to "everyone is loitering",
+       and E on the table opens this board rather than the structure panel —
+       so the upgrade has to live right here. */
+    const box = $('job-upgrade');
+    box.innerHTML = '';
+    const tables = g.building.list.filter((b) => b.defId === 'council');
+    if (tables.length) {
+      let best = tables[0];
+      for (const t of tables) if (t.level > best.level) best = t;
+      const def = best.def;
+      const maxed = best.level >= def.max;
+      const nextCost = maxed ? null : def.cost(best.level + 1);
+      const nextSlots = maxed ? 0 : def.effects(best.level + 1).jobSlots;
+      let costHtml = '';
+      if (nextCost) {
+        for (const k in nextCost) {
+          const have = k === 'coin' ? g.inv.coins : g.inv.count(k);
+          const icon = k === 'coin' ? '💰' : (C.ITEMS[k] ? C.ITEMS[k].icon : k);
+          costHtml += '<span class="' + (have >= nextCost[k] ? '' : 'no') + '">' + icon + ' ' + U.fa(nextCost[k]) + '</span>';
+        }
+      }
+      /* Say plainly why an upgrade is out of reach. A greyed-out button with
+         no explanation is indistinguishable from a broken one. */
+      const needSkill = def.sk + best.level;
+      const haveSkill = g.progress.skill('building').level;
+      const poor = nextCost && !g.inv.canAfford(nextCost);
+      const unskilled = !maxed && haveSkill < needSkill;
+      let why = '';
+      if (maxed) why = 'در بالاترین سطح است.';
+      else if (unskilled) why = '🔒 به مهارت معماری سطح ' + U.fa(needSkill) + ' نیاز دارد (الان ' + U.fa(haveSkill) + ') — بساز تا بالا برود';
+      else if (poor) why = 'منابع کافی نداری';
+      else why = 'ارتقا: جای کار از ' + U.fa(slots) + ' به ' + U.fa(nextSlots) + ' می‌رسد';
+
+      const row = document.createElement('div');
+      row.className = 'job-up';
+      row.innerHTML = '<span class="ji">🪑</span><span class="jn"><b>میز شورا — سطح ' +
+        U.fa(best.level) + '/' + U.fa(def.max) + '</b><small>' + why + '</small></span>' +
+        '<span class="cc">' + costHtml + '</span>';
+      if (!maxed) {
+        const b = document.createElement('button');
+        b.className = 'btn gold';
+        b.textContent = '⬆️ ارتقا';
+        b.disabled = poor || unskilled;
+        b.onclick = function () { if (g.building.upgrade(best)) self.renderJobs(); };
+        row.appendChild(b);
+      }
+      box.appendChild(row);
+    }
 
     const list = $('job-list');
     list.innerHTML = '';

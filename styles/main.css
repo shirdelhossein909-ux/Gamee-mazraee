@@ -1,5 +1,5 @@
 /* =========================================================
-   مزرعه و شهر — UI Stylesheet
+   کِشتوَر (Keshtvar) — UI Stylesheet
    Pure CSS3: gradients, blur, transforms, keyframes. No assets.
    ========================================================= */
 
@@ -111,6 +111,13 @@ kbd{
 .res .ic{font-size:14px}
 .res b{color:#fff;font-weight:600}
 .res.up{animation:flashUp .6s ease}
+.res.cap{opacity:.75}
+.res.cap em{font-style:normal;font-size:11px;margin-right:6px}
+.res.cap.nearfull{opacity:1;color:var(--gold)}
+.res.cap.nearfull b{color:var(--gold)}
+.res.cap.full{opacity:1;color:var(--red);animation:capPulse 1.6s ease-in-out infinite}
+.res.cap.full b{color:var(--red)}
+@keyframes capPulse{0%,100%{filter:brightness(1)}50%{filter:brightness(1.65)}}
 
 #topright{position:absolute;top:14px;left:14px;display:flex;flex-direction:column;gap:10px;align-items:flex-start}
 #clockbox{padding:9px 14px;min-width:196px;text-align:center}
@@ -496,6 +503,16 @@ h3.sec{font-size:13px;color:var(--gold);margin:18px 0 10px;padding-bottom:6px;bo
   background:rgba(255,255,255,.04);border:1px solid var(--line);flex-wrap:wrap;
 }
 .job.on{border-color:rgba(103,216,107,.45);background:rgba(103,216,107,.09)}
+.job-up{
+  display:flex;align-items:center;gap:12px;padding:11px 13px;border-radius:13px;margin-bottom:12px;
+  background:rgba(199,162,77,.10);border:1px solid rgba(199,162,77,.42);flex-wrap:wrap
+}
+.job-up .ji{font-size:26px}
+.job-up .jn{flex:1;min-width:160px;font-size:13.5px}
+.job-up .jn small{display:block;color:var(--muted);font-size:11px;line-height:1.75;margin-top:3px}
+.job-up .cc{display:flex;gap:7px;flex-wrap:wrap;font-size:12px}
+.job-up .cc .no{color:var(--red)}
+.job-up .btn{padding:7px 14px;font-size:12.5px}
 .job .ji{font-size:26px}
 .job .jn{flex:1;min-width:150px;font-size:13.5px}
 .job .jn small{display:block;color:var(--muted);font-size:11px;line-height:1.75;margin-top:3px}
