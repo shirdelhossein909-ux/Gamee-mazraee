@@ -19,14 +19,29 @@
     this._pool = Object.create(null);
   }
 
+  /* How tempting a target the settlement is. Drives raid frequency, which
+     species turn up, and how many of them. A starting farm scores ~0.2. */
+  Wildlife.prototype.threat = function () {
+    const g = this.game, T = C.THREAT;
+    const b = g.building ? g.building.list.length : 0;
+    const pop = g.progress ? g.progress.population : 0;
+    const tier = g.progress ? g.progress.tier : 0;
+    const lvl = g.progress ? g.progress.level : 1;
+    const score = b * T.perBuilding + pop * T.perPopulation +
+      tier * T.perTier + lvl * T.perLevel;
+    return U.clamp(score / T.divisor, 0, T.max);
+  };
+
   Wildlife.prototype.cap = function () {
     const night = this.game.sky.isNight();
-    return night ? 20 : 14;
+    const t = this.threat();
+    return Math.round(night ? 11 + t * 2.6 : 10 + t * 1.4);
   };
 
   /* ===================== SPAWNING ===================== */
   Wildlife.prototype.update = function (dt) {
     const p = this.game.player;
+    this._threatCache = this.threat();
     this.spawnTimer -= dt;
     if (this.spawnTimer <= 0) {
       this.spawnTimer = 1.6 + Math.random() * 2.2;
@@ -53,11 +68,15 @@
       if (world.slopeAt(x, z) > 3) continue;
       const biome = world.biomeAt(x, z, h);
       // build a weighted list of species that live here
+      const threat = this.threat();
       const opts = [];
       for (const id in C.ANIMALS) {
         const def = C.ANIMALS[id];
         if (def.biomes.indexOf(biome) < 0) continue;
+        if (def.minThreat && threat < def.minThreat) continue;   // not yet
         let w = def.weight * (night ? def.night : 1);
+        // predators stay scarce around a small settlement
+        if (def.hostile) w *= U.clamp(0.18 + threat * 0.34, 0.18, 2.2);
         if (w <= 0) continue;
         opts.push([id, w]);
       }
@@ -71,7 +90,7 @@
   Wildlife.prototype.spawn = function (type, x, y, z) {
     const def = C.ANIMALS[type];
     if (!def) return null;
-    const obj = M.animal(def.model);
+    const obj = M.animal(def.model, def.tint);
     obj.scale.setScalar(def.size);
     obj.position.set(x, y, z);
     this.group.add(obj);
@@ -98,6 +117,12 @@
   /* ===================== AI ===================== */
   Wildlife.prototype._stepAnimal = function (a, dt, player) {
     const world = this.game.world, def = a.def;
+    /* Never let one end up inside a building. Without this an animal that
+       clips a doorway while chasing gets wedged in the walls forever. */
+    if (this.game.building) {
+      const esc = this.game.building.escapeFrom(a.x, a.z, 0.25);
+      if (esc) { a.x = esc.x; a.z = esc.z; a.y = world.heightAt(a.x, a.z); a.stuck = 0; }
+    }
     const pdx = player.pos.x - a.x, pdz = player.pos.z - a.z;
     const pd = Math.hypot(pdx, pdz);
     const night = this.game.sky.isNight();
@@ -105,8 +130,12 @@
     a.attackCd = Math.max(0, a.attackCd - dt);
     a.alertT = Math.max(0, a.alertT - dt);
 
-    const hostile = def.hostile || a.angry;
-    const aggro = (def.hostile ? (night ? 26 : 16) : 0) + (a.angry ? 22 : 0);
+    /* Daylight is safe: predators ignore you completely unless you struck
+       first. After dark they hunt, and the bolder they get the bigger the
+       settlement is. */
+    const hostile = (def.hostile && night) || a.angry;
+    const threat = this._threatCache;
+    const aggro = (def.hostile && night ? 20 + threat * 2.5 : 0) + (a.angry ? 20 : 0);
 
     /* ---- pick a state ---- */
     if (hostile && pd < aggro && !this._playerSafe(player)) {
@@ -119,8 +148,9 @@
       if (a.timer <= 0) { a.state = 'wander'; a.timer = 1 + Math.random() * 2; }
     }
 
-    /* night raid: hostiles and thieves head for the settlement */
-    if (!a.raid && (def.hostile || def.thief) && night && Math.random() < dt * 0.06) {
+    /* Night raid — only after dark, and only if the town is worth the trip */
+    if (!a.raid && (def.hostile || def.thief) && night && threat >= C.THREAT.raidMin &&
+      Math.random() < dt * 0.009 * threat) {
       const t = this.game.building ? this.game.building.raidTarget(a.x, a.z) : null;
       if (t && U.dist(a.x, a.z, t.x, t.z) < 130) { a.raid = true; a.raidTarget = t; a.state = 'raid'; }
     }

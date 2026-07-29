@@ -383,19 +383,19 @@
     effects: (l) => ({ fishing: l, happy: 1 }), water: true
   });
   bld({
-    id: 'fence', name: 'حصار چوبی', icon: '🪵', cat: 'def', model: 'fence', size: [1, 1], max: 3, tier: 0, sk: 0,
-    desc: 'جلوی حیوانات وحشی را می‌گیرد. ارزان و سریع.',
+    id: 'fence', name: 'حصار چوبی', icon: '🪵', cat: 'def', model: 'fence', size: [2, 2], connects: true, max: 3, tier: 0, sk: 0,
+    desc: 'جلوی حیوانات وحشی را می‌گیرد. ارزان و سریع — قطعه‌ها خودکار به هم می‌چسبند.',
     cost: (l) => scale({ wood: 4 }, l, 2.2),
     effects: (l) => ({ defense: l, block: true }), hp: (l) => 40 * l
   });
   bld({
-    id: 'stone_wall', name: 'دیوار سنگی', icon: '🧱', cat: 'def', model: 'wall', size: [1, 1], max: 3, tier: 1, sk: 2,
-    desc: 'دیوار محکم؛ حیوانات بزرگ هم نمی‌توانند بشکنندش.',
+    id: 'stone_wall', name: 'دیوار سنگی', icon: '🧱', cat: 'def', model: 'wall', size: [2, 2], connects: true, max: 3, tier: 1, sk: 2,
+    desc: 'دیوار محکم؛ خودکار به دیوارهای کناری وصل می‌شود و گوشه می‌سازد.',
     cost: (l) => scale({ stone: 8, brick: 2 }, l, 2.2),
     effects: (l) => ({ defense: 2 * l, block: true }), hp: (l) => 140 * l
   });
   bld({
-    id: 'gate', name: 'دروازه', icon: '🚪', cat: 'def', model: 'gate', size: [2, 1], max: 3, tier: 1, sk: 2,
+    id: 'gate', name: 'دروازه', icon: '🚪', cat: 'def', model: 'gate', size: [2, 2], connects: true, max: 3, tier: 1, sk: 2,
     desc: 'از آن رد می‌شوی ولی حیوانات نه.',
     cost: (l) => scale({ wood: 12, iron: 2 }, l),
     effects: (l) => ({ defense: l, block: true, passable: true }), hp: (l) => 100 * l
@@ -413,6 +413,13 @@
     desc: 'خانهٔ اسب‌ها و سوارکاران. هر سطح، جای یک سوارکار بیشتر می‌دهد تا برای آوردن مردم به سفر بروند.',
     cost: (l) => Object.assign(scale({ wood: 45, stone: 20, fiber: 15 }, l), { coin: Math.round(180 * Math.pow(1.9, l - 1)) }),
     effects: (l) => ({ happy: 2, riders: l })
+  });
+
+  bld({
+    id: 'council', name: 'میز شورا', icon: '🪑', cat: 'city', model: 'council', size: [6, 5], max: 3, tier: 0, sk: 1,
+    desc: 'میز بزرگ قبیله. کنارش بایست و کلید E را بزن تا به هر کس وظیفه بدهی: چوب‌بری، سنگ‌کاری، شکار، کشاورزی یا نگهبانی.',
+    cost: (l) => scale({ wood: 30, plank: 4 }, l),
+    effects: (l) => ({ happy: 3, jobSlots: 2 + l * 2 })
   });
 
   C.BUILD_CATS = [
@@ -458,8 +465,43 @@
     bear: {
       id: 'bear', name: 'خرس', icon: '🐻', model: 'bear', hostile: true,
       hp: 95, speed: 4.9, dmg: 22, xp: 90, size: 1.5, biomes: ['forest', 'snow', 'rocky'],
-      drop: { meat: [4, 6], hide: [2, 4] }, extra: { leather: [0, 1] }, night: 1.5, weight: 0.5
+      drop: { meat: [4, 6], hide: [2, 4] }, extra: { leather: [0, 1] }, night: 1.5, weight: 0.5,
+      minThreat: 1.2
+    },
+    /* The rest only appear once the settlement is worth raiding. minThreat is
+       compared against the town's power score, so a small farm is left alone
+       and a metropolis gets serious visitors. */
+    direwolf: {
+      id: 'direwolf', name: 'گرگ سیاه', icon: '🐺', model: 'wolf', hostile: true, pack: 4,
+      hp: 78, speed: 7.0, dmg: 17, xp: 110, size: 1.2, biomes: ['forest', 'snow', 'rocky', 'plains'],
+      drop: { meat: [2, 3], hide: [2, 3] }, extra: { leather: [0, 1] }, night: 3.0, weight: 1.1,
+      minThreat: 1.8, tint: 0x3a3f4a
+    },
+    tusker: {
+      id: 'tusker', name: 'گراز غول‌پیکر', icon: '🐗', model: 'boar', hostile: true,
+      hp: 150, speed: 5.4, dmg: 27, xp: 210, size: 1.7, biomes: ['forest', 'swamp', 'plains', 'savanna'],
+      drop: { meat: [6, 9], hide: [3, 5] }, extra: { leather: [1, 2] }, night: 2.2, weight: 0.7,
+      minThreat: 2.8
+    },
+    alphabear: {
+      id: 'alphabear', name: 'خرس غول‌آسا', icon: '🐻‍❄️', model: 'bear', hostile: true,
+      hp: 260, speed: 5.2, dmg: 38, xp: 420, size: 2.1, biomes: ['forest', 'snow', 'rocky'],
+      drop: { meat: [9, 14], hide: [5, 8] }, extra: { leather: [2, 4], gem: [0, 1] }, night: 1.8, weight: 0.45,
+      minThreat: 4.0
     }
+  };
+
+  /* ===================== THREAT ===================== */
+  /* Raids scale with how much there is to raid. A lone tent is ignored;
+     a walled city with a big population draws packs of dire wolves. */
+  C.THREAT = {
+    perBuilding: 0.9,
+    perPopulation: 1.5,
+    perTier: 13,
+    perLevel: 1.1,
+    divisor: 34,
+    max: 6,
+    raidMin: 0.4          // below this, nothing ever raids the town
   };
 
   C.FISH = [
@@ -539,6 +581,17 @@
     riderUpgrade: (lvl) => ({ coin: Math.round(600 * Math.pow(1.85, lvl - 2)), wheat: 15 * lvl, iron: 4 * lvl }),
     tripCost: (lvl) => ({ bread: Math.max(1, 3 - Math.floor(lvl / 2)), coin: 60 + lvl * 20 })
   };
+
+  /* ===================== VILLAGER JOBS ===================== */
+  C.JOBS = [
+    { id: 'idle', name: 'بی‌کار', icon: '🚶', desc: 'فقط در شهر می‌گردد.' },
+    { id: 'wood', name: 'چوب‌بری', icon: '🪓', desc: 'به درخت‌ها می‌رود و چوب می‌آورد.' },
+    { id: 'stone', name: 'سنگ‌کاری', icon: '⛏️', desc: 'از صخره‌ها سنگ و زغال و سنگ‌آهن می‌آورد.' },
+    { id: 'hunt', name: 'شکارچی', icon: '🏹', desc: 'حیوانات را شکار می‌کند و گوشت و پوست می‌آورد.' },
+    { id: 'farm', name: 'کشاورز', icon: '🌾', desc: 'محصولات رسیده را خودش برداشت می‌کند.' },
+    { id: 'guard', name: 'نگهبان', icon: '🛡️', desc: 'با کمان از شهر در برابر حیوانات مهاجم دفاع می‌کند.' }
+  ];
+  C.JOB_TICK = 3.5;        // in-game hours between one worker's yields
 
   /* ===================== STARTING STATE ===================== */
   C.START = {

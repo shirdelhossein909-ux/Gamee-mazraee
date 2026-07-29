@@ -10,6 +10,7 @@
     keys: Object.create(null),
     _pressed: Object.create(null),
     _released: Object.create(null),
+    _skipMove: 0,
     mx: 0, my: 0,          // pointer position in px (when unlocked)
     dx: 0, dy: 0,          // pointer delta this frame
     wheel: 0,
@@ -54,8 +55,13 @@
 
       addEventListener('mousemove', function (e) {
         if (self.locked) {
-          self.dx += e.movementX || 0;
-          self.dy += e.movementY || 0;
+          /* Browsers often deliver one huge movementX/Y on the first event
+             after pointer lock engages — that reads as the camera "jumping"
+             then feeling late. Drop it, and clamp the rest. */
+          if (self._skipMove > 0) { self._skipMove--; return; }
+          const LIM = 220;
+          self.dx += Math.max(-LIM, Math.min(LIM, e.movementX || 0));
+          self.dy += Math.max(-LIM, Math.min(LIM, e.movementY || 0));
         } else {
           const r = canvas.getBoundingClientRect();
           self.mx = e.clientX - r.left;
@@ -73,6 +79,8 @@
 
       document.addEventListener('pointerlockchange', function () {
         self.locked = document.pointerLockElement === canvas;
+        self._skipMove = self.locked ? 2 : 0;
+        self.dx = 0; self.dy = 0;      // start clean, never with a stale delta
         if (!self.locked) G.Bus && G.Bus.emit('pointerunlock');
       });
 

@@ -50,8 +50,9 @@
     s.mapSize.set(2048, 2048);
     s.camera.near = 1;
     s.camera.far = 260;
-    s.camera.left = -70; s.camera.right = 70;
-    s.camera.top = 70; s.camera.bottom = -70;
+    // tighter frustum = more texels per metre = crisper, steadier shadows
+    s.camera.left = -52; s.camera.right = 52;
+    s.camera.top = 52; s.camera.bottom = -52;
     s.bias = -0.0009;
     s.normalBias = 0.035;
     this.scene.add(this.sun);
@@ -305,8 +306,16 @@
     const below = sy < 0;
     const lx = below ? -upX : upX, ly = below ? -upY : upY, lz = below ? -upZ : upZ;
 
-    this.sun.position.set(px + lx * 120, ly * 130 + 12, pz + lz * 120);
-    this.sun.target.position.set(px, 0, pz);
+    /* Snap the shadow frustum to whole texels. Without this the depth map
+       slides a fraction of a texel every frame as you walk and the shadow
+       edges visibly crawl, like clouds drifting over the ground. */
+    const cam = this.sun.shadow.camera;
+    const texel = (cam.right - cam.left) / this.sun.shadow.mapSize.x;
+    const snap = Math.max(0.05, texel * 8);
+    const sxp = Math.round(px / snap) * snap;
+    const szp = Math.round(pz / snap) * snap;
+    this.sun.position.set(sxp + lx * 120, ly * 130 + 12, szp + lz * 120);
+    this.sun.target.position.set(sxp, 0, szp);
     this.sun.target.updateMatrixWorld();
 
     const flash = this._flash > 0 ? 1.6 : 0;

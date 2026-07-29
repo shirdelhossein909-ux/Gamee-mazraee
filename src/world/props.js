@@ -791,38 +791,117 @@
     return g;
   };
 
-  BM.fence = function (l) {
+  /* ---------------------------------------------------------
+     Defensive pieces are neighbour-aware. Each one fills a whole
+     grid cell and grows an arm toward every adjacent wall piece,
+     so a run of them meets edge-to-edge with no seam and corners
+     turn properly. `mask` bits: 1=+X 2=-X 4=+Z 8=-Z.
+     --------------------------------------------------------- */
+  const CELL_HALF = C.WORLD.gridSize / 2;      // arm length: centre -> cell edge
+
+  function armDirs(mask) {
+    if (!mask) mask = 3;                        // lone piece reads as an east-west run
+    const out = [];
+    if (mask & 1) out.push([1, 0]);
+    if (mask & 2) out.push([-1, 0]);
+    if (mask & 4) out.push([0, 1]);
+    if (mask & 8) out.push([0, -1]);
+    return out;
+  }
+
+  BM.fence = function (l, def, mask) {
     const p = [];
     const col = l >= 3 ? COL.plank : (l >= 2 ? COL.wood : COL.woodDark);
-    for (const sx of [-1, 1]) p.push({ g: P.box, c: col, p: [sx * 0.72, 0.62, 0], s: [0.2, 1.24, 0.2] });
-    p.push({ g: P.box, c: col, p: [0, 0.92, 0], s: [1.6, 0.14, 0.12] });
-    p.push({ g: P.box, c: col, p: [0, 0.55, 0], s: [1.6, 0.14, 0.12] });
-    if (l >= 2) p.push({ g: P.box, c: col, p: [0, 0.74, 0], r: [0, 0, 0.5], s: [1.5, 0.09, 0.09] });
-    if (l >= 3) for (const sx of [-1, 1]) p.push({ g: P.cone5, c: COL.woodDark, p: [sx * 0.72, 1.3, 0], s: [0.24, 0.28, 0.24] });
-    return assemble(p);
-  };
-
-  BM.wall = function (l) {
-    const p = [];
-    const h = 1.5 + l * 0.35;
-    p.push({ g: P.box, c: COL.stone, p: [0, h / 2, 0], s: [1.7, h, 0.7] });
-    for (let i = 0; i < 3; i++) {
-      p.push({ g: P.box, c: i % 2 ? COL.stoneDark : COL.stone, p: [(i - 1) * 0.5, h * 0.3 + i * 0.25, 0], s: [0.5, 0.3, 0.75] });
+    const H = 1.24, L = CELL_HALF;
+    // centre post
+    p.push({ g: P.box, c: col, p: [0, H / 2, 0], s: [0.26, H, 0.26] });
+    for (const d of armDirs(mask)) {
+      const cx = d[0] * L / 2, cz = d[1] * L / 2;
+      const sx = d[0] ? L : 0.13, sz = d[1] ? L : 0.13;
+      for (const y of [0.92, 0.55]) p.push({ g: P.box, c: col, p: [cx, y, cz], s: [sx, 0.14, sz] });
+      if (l >= 2) {
+        p.push({
+          g: P.box, c: col, p: [cx, 0.74, cz],
+          r: d[0] ? [0, 0, 0.5] : [0.5, 0, 0],
+          s: d[0] ? [L * 0.95, 0.09, 0.09] : [0.09, 0.09, L * 0.95]
+        });
+      }
     }
-    for (let i = 0; i < 3; i++) p.push({ g: P.box, c: COL.stoneDark, p: [-0.55 + i * 0.55, h + 0.16, 0], s: [0.42, 0.32, 0.78] });
-    if (l >= 3) p.push({ g: P.box, c: COL.iron, p: [0, h + 0.05, 0], s: [1.72, 0.1, 0.85] });
+    if (l >= 3) p.push({ g: P.cone5, c: COL.woodDark, p: [0, H + 0.16, 0], s: [0.32, 0.3, 0.32] });
     return assemble(p);
   };
 
-  BM.gate = function (l) {
+  BM.wall = function (l, def, mask) {
+    const p = [];
+    const h = 1.5 + l * 0.35, T = 0.78, L = CELL_HALF;
+    // centre pillar keeps corners solid
+    p.push({ g: P.box, c: COL.stone, p: [0, h / 2, 0], s: [T, h, T] });
+    p.push({ g: P.box, c: COL.stoneDark, p: [0, h + 0.16, 0], s: [T * 1.04, 0.32, T * 1.04] });
+    for (const d of armDirs(mask)) {
+      const cx = d[0] * L / 2, cz = d[1] * L / 2;
+      const sx = d[0] ? L : T, sz = d[1] ? L : T;
+      p.push({ g: P.box, c: COL.stone, p: [cx, h / 2, cz], s: [sx, h, sz] });
+      // stone courses for texture
+      for (let i = 0; i < 2; i++) {
+        const t = 0.28 + i * 0.44;
+        p.push({
+          g: P.box, c: i % 2 ? COL.stoneDark : COL.stone,
+          p: [d[0] * t, h * 0.3 + i * 0.3, d[1] * t],
+          s: [d[0] ? 0.36 : T * 1.03, 0.28, d[1] ? 0.36 : T * 1.03]
+        });
+      }
+      // crenellations along the arm
+      for (let i = 0; i < 2; i++) {
+        const t = 0.3 + i * 0.45;
+        p.push({
+          g: P.box, c: COL.stoneDark,
+          p: [d[0] * t, h + 0.16, d[1] * t],
+          s: [d[0] ? 0.34 : T * 1.05, 0.32, d[1] ? 0.34 : T * 1.05]
+        });
+      }
+      if (l >= 3) p.push({ g: P.box, c: COL.iron, p: [cx, h + 0.02, cz], s: [sx, 0.1, sz] });
+    }
+    return assemble(p);
+  };
+
+  BM.gate = function (l, def, mask) {
     const p = [];
     const h = 2.2 + l * 0.2;
-    for (const sx of [-1, 1]) p.push({ g: P.box, c: COL.stone, p: [sx * 1.5, h / 2, 0], s: [0.7, h, 0.9] });
-    p.push({ g: P.box, c: COL.woodDark, p: [0, h + 0.2, 0], s: [3.8, 0.4, 0.9] });
-    for (let i = 0; i < 5; i++) p.push({ g: P.box, c: COL.wood, p: [-1.0 + i * 0.5, h * 0.45, 0], s: [0.42, h * 0.9, 0.22] });
-    p.push({ g: P.box, c: COL.iron, p: [0, h * 0.65, 0.14], s: [2.4, 0.16, 0.09] });
-    p.push({ g: P.box, c: COL.iron, p: [0, h * 0.28, 0.14], s: [2.4, 0.16, 0.09] });
-    if (l >= 2) for (const sx of [-1, 1]) p.push({ g: P.cone5, c: COL.roofRed, p: [sx * 1.5, h + 0.65, 0], s: [0.95, 0.7, 1.1] });
+    // the barrier lies along whichever axis the wall run follows
+    const alongX = !mask ? true : !!(mask & 3);
+    const ax = alongX ? 1 : 0, az = alongX ? 0 : 1;
+    const L = CELL_HALF;
+    for (const s2 of [-1, 1]) {
+      p.push({
+        g: P.box, c: COL.stone,
+        p: [ax * s2 * (L - 0.22), h / 2, az * s2 * (L - 0.22)],
+        s: [alongX ? 0.55 : 0.9, h, alongX ? 0.9 : 0.55]
+      });
+    }
+    p.push({
+      g: P.box, c: COL.woodDark, p: [0, h + 0.2, 0],
+      s: [alongX ? L * 2 : 0.92, 0.4, alongX ? 0.92 : L * 2]
+    });
+    for (let i = 0; i < 4; i++) {
+      const t = (i - 1.5) * 0.31;
+      p.push({
+        g: P.box, c: COL.wood, p: [ax * t, h * 0.45, az * t],
+        s: [alongX ? 0.28 : 0.24, h * 0.9, alongX ? 0.24 : 0.28]
+      });
+    }
+    for (const y of [h * 0.65, h * 0.28]) {
+      p.push({
+        g: P.box, c: COL.iron, p: [ax * 0, y, az * 0 + (alongX ? 0.14 : 0)],
+        s: [alongX ? 1.35 : 0.09, 0.16, alongX ? 0.09 : 1.35]
+      });
+    }
+    if (l >= 2) for (const s2 of [-1, 1]) {
+      p.push({
+        g: P.cone5, c: COL.roofRed,
+        p: [ax * s2 * (L - 0.22), h + 0.62, az * s2 * (L - 0.22)],
+        s: [alongX ? 0.8 : 1.1, 0.7, alongX ? 1.1 : 0.8]
+      });
+    }
     if (l >= 3) p.push({ g: P.sph, c: COL.gold, p: [0, h + 0.55, 0], s: [0.35, 0.35, 0.35] });
     return assemble(p);
   };
@@ -837,6 +916,42 @@
     p.push({ g: P.cone5, c: COL.iron, p: [0, h + 0.75, 0], s: [0.55, 0.3, 0.55] });
     if (l >= 2) for (const sx of [-1, 1]) p.push({ g: P.box, c: COL.iron, p: [sx * 0.28, h - 0.25, 0], r: [0, 0, sx * 0.7], s: [0.5, 0.07, 0.07] });
     return assemble(p, true);
+  };
+
+  BM.council = function (l) {
+    const p = [];
+    const w = 4.6, d = 2.6, top = 1.0;
+    // flagged canopy poles at the corners
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+      p.push({ g: P.cyl6, c: COL.woodDark, p: [sx * (w / 2 + 0.35), 1.35, sz * (d / 2 + 0.75)], s: [0.18, 2.7, 0.18] });
+    }
+    if (l >= 2) {
+      gable(p, 0, 2.7, 0, w + 1.2, d + 2.0, 0.7, l >= 3 ? COL.roofBlue : COL.thatch);
+    }
+    // the table itself
+    p.push({ g: P.box, c: l >= 3 ? COL.marble : COL.plank, p: [0, top, 0], s: [w, 0.18, d] });
+    p.push({ g: P.box, c: COL.woodDark, p: [0, top - 0.12, 0], s: [w * 0.92, 0.1, d * 0.9] });
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+      p.push({ g: P.box, c: COL.woodDark, p: [sx * (w / 2 - 0.4), top / 2, sz * (d / 2 - 0.35)], s: [0.24, top, 0.24] });
+    }
+    // benches all the way round, so the whole tribe can sit
+    for (const sz of [-1, 1]) {
+      p.push({ g: P.box, c: COL.wood, p: [0, 0.55, sz * (d / 2 + 0.75)], s: [w * 0.88, 0.14, 0.5] });
+      for (const sx of [-1, 1]) p.push({ g: P.box, c: COL.woodDark, p: [sx * (w * 0.34), 0.28, sz * (d / 2 + 0.75)], s: [0.16, 0.55, 0.4] });
+    }
+    // map, plans and a lantern on the table top
+    p.push({ g: P.box, c: 0xe8e0c8, p: [-0.7, top + 0.11, 0], r: [0, 0.2, 0], s: [1.6, 0.04, 1.1] });
+    p.push({ g: P.box, c: 0x8a6034, p: [-0.7, top + 0.14, 0], r: [0, 0.2, 0], s: [0.9, 0.03, 0.5] });
+    p.push({ g: P.cyl, c: COL.iron, p: [1.5, top + 0.2, 0.4], s: [0.26, 0.22, 0.26] });
+    p.push({ g: P.taper(0.7, 0.4, 5), c: 0xffdd88, glow: true, p: [1.5, top + 0.42, 0.4], s: [0.34, 0.4, 0.34] });
+    for (let i = 0; i < 3; i++) {
+      p.push({ g: P.box, c: [0xd23b32, 0x3f7a9e, 0x4a8040][i], p: [0.4 + i * 0.35, top + 0.14, -0.6], r: [0, i * 0.4, 0], s: [0.28, 0.05, 0.4] });
+    }
+    if (l >= 2) p.push({ g: P.box, c: COL.gold, p: [0, top + 0.2, 0.9], s: [0.7, 0.06, 0.24] });
+    if (l >= 3) for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+      p.push({ g: P.box, c: 0xd23b32, p: [sx * (w / 2 + 0.35), 2.35, sz * (d / 2 + 0.75)], s: [0.06, 0.5, 0.7] });
+    }
+    return assemble(p);
   };
 
   BM.stable = function (l) {
@@ -893,10 +1008,10 @@
   M.BUILDERS = BM;
 
   /** main entry: build a building model by definition + level */
-  M.building = function (defId, level) {
+  M.building = function (defId, level, mask) {
     const def = C.BUILDINGS[defId];
     const fn = BM[def.model] || BM.shed;
-    const g = fn(level || 1, def);
+    const g = fn(level || 1, def, mask);
     g.userData.defId = defId;
     return g;
   };
@@ -914,8 +1029,10 @@
     bear: { body: 0x4a3628, belly: 0x5e4636, bl: 1.7, bh: 1.1, bw: 1.0, leg: 0.68, ear: 'round', tail: 'small', head: 0.66 }
   };
 
-  M.animal = function (type) {
-    const s = ANIM_STYLE[type] || ANIM_STYLE.wolf;
+  M.animal = function (type, tint, scale) {
+    const base = ANIM_STYLE[type] || ANIM_STYLE.wolf;
+    // a tint lets one model serve several species (wolf vs dire wolf)
+    const s = tint ? Object.assign({}, base, { body: tint }) : base;
     const g = new THREE.Group();
     const legY = s.leg;
 

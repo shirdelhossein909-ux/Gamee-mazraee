@@ -223,7 +223,7 @@
         const b = t.building;
         return {
           name: b.def.icon + ' ' + b.def.name + ' — سطح ' + U.fa(b.level),
-          hint: 'کلید E: اطلاعات و ارتقا',
+          hint: b.defId === 'council' ? 'کلید E: تعیین وظیفهٔ اهالی' : 'کلید E: اطلاعات و ارتقا',
           hp: b.maxHp ? b.hp / b.maxHp : 1
         };
       }
@@ -339,6 +339,7 @@
         g.ui.toast('🌱 هنوز رسیده نیست', 'bad');
         return;
       case 'building':
+        if (t.building.defId === 'council') return void g.ui.openPanel('jobs');
         return void g.ui.openStructure(t.building);
       case 'vehicle':
         return void g.vehicles.mount(t.vehicle);
@@ -448,7 +449,7 @@
     // swing from the player's chest, not from the camera behind them
     const from = new THREE.Vector3(p.pos.x, p.pos.y + 1.2, p.pos.z);
     const hit = g.wildlife.rayPick(from, ray.dir, st.range + 1.5);
-    const dmg = st.damage * (1 + prog.skill('combat').level * 0.05);
+    const dmg = st.damage * (1 + prog.skill('combat').level * 0.05) * prog.powerMul();
     if (hit) g.wildlife.hit(hit.animal, dmg, p.pos.x, p.pos.z);
     else {
       // wide sweep fallback so melee still connects at close range
@@ -472,7 +473,7 @@
       p.pos.y + 1.35 + ray.dir.y * 0.9,
       p.pos.z + ray.dir.z * 0.9
     );
-    const dmg = st.damage * (1 + prog.skill('combat').level * 0.05);
+    const dmg = st.damage * (1 + prog.skill('combat').level * 0.05) * prog.powerMul();
     g.wildlife.shoot(origin, ray.dir.clone(), dmg, st.range);
   };
 

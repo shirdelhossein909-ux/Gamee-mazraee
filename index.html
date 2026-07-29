@@ -110,7 +110,7 @@
       <div id="keyhints">
         <span><kbd>I</kbd> کوله</span><span><kbd>B</kbd> ساخت</span><span><kbd>M</kbd> بازار</span>
         <span><kbd>K</kbd> مهارت</span><span><kbd>Q</kbd> مأموریت</span><span><kbd>P</kbd> اهالی</span>
-        <span><kbd>N</kbd> نقشه</span><span><kbd>V</kbd> سوار/پیاده</span><span><kbd>ESC</kbd> منو</span>
+        <span><kbd>N</kbd> نقشه</span><span><kbd>J</kbd> وظایف</span><span><kbd>V</kbd> سوار/پیاده</span><span><kbd>ESC</kbd> منو</span>
       </div>
     </div>
   </div>
@@ -204,6 +204,16 @@
         <div id="rider-actions" class="st-actions"></div>
         <h3 class="sec">🚗 وسایل نقلیه</h3>
         <div id="veh-list"></div>
+      </div>
+    </section>
+
+    <!-- Job board (council table) -->
+    <section class="panel wide hidden" id="panel-jobs">
+      <header><h2>🪑 میز شورا — تعیین وظیفهٔ اهالی</h2><button class="close">✕</button></header>
+      <div class="panel-body">
+        <div class="pop-hero" id="job-hero"></div>
+        <div id="job-note" style="font-size:12px;color:var(--muted);line-height:1.9;margin-bottom:12px"></div>
+        <div id="job-list"></div>
       </div>
     </section>
 

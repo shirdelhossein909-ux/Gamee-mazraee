@@ -116,7 +116,7 @@
       this.camPitch = U.clamp(this.camPitch + IN.dy * sens, -0.85, 1.15);
       if (IN.wheel) this.camWant = U.clamp(this.camWant + IN.wheel * 1.1, 2.2, 18);
     }
-    this.camDist = U.damp(this.camDist, this.camWant, 9, dt);
+    this.camDist = U.damp(this.camDist, this.camWant, 14, dt);
 
     /* ---- riding: the vehicle drives, we just sit and look ---- */
     if (this.mount) {
@@ -175,6 +175,11 @@
 
     this.pos.y += this.vel.y * dt;
 
+    // if a structure went up around us, step outside instead of sticking
+    if (this.game.building) {
+      const esc = this.game.building.escapeFrom(this.pos.x, this.pos.z, 0.2);
+      if (esc) { this.pos.x = esc.x; this.pos.z = esc.z; }
+    }
     const ground = world.heightAt(this.pos.x, this.pos.z);
     this.inWater = ground < W.waterLevel - 0.25;
     /* deep water: swim at the surface instead of being blocked by it */
@@ -314,16 +319,17 @@
     const want = this.camDist;
     const STEPS = 6;
 
-    /* How far can the boom extend at a given pitch before terrain comes
-       between the camera and the player? */
+    /* How far can the boom extend at a given pitch before terrain — or one of
+       your own walls and roofs — comes between the camera and the player? */
+    const bld = this.game.building;
     const clearanceAt = (pitch) => {
       const cp = Math.cos(pitch), sp = Math.sin(pitch);
       const dx = Math.sin(this.camYaw) * cp, dz = Math.cos(this.camYaw) * cp;
       for (let i = 1; i <= STEPS; i++) {
         const t = (i / STEPS) * want;
-        if (targetY + sp * t < world.heightAt(this.pos.x + dx * t, this.pos.z + dz * t) + 0.7) {
-          return ((i - 1) / STEPS) * want;
-        }
+        const px = this.pos.x + dx * t, py = targetY + sp * t, pz = this.pos.z + dz * t;
+        if (py < world.heightAt(px, pz) + 0.7) return ((i - 1) / STEPS) * want;
+        if (bld && bld.solidAt(px, py, pz, 0.5)) return ((i - 1) / STEPS) * want;
       }
       return want;
     };
@@ -346,8 +352,8 @@
     const cp = Math.cos(pitch), sp = Math.sin(pitch);
     const dirX = Math.sin(this.camYaw) * cp;
     const dirZ = Math.cos(this.camYaw) * cp;
-    const wantX = this.pos.x + dirX * d;
-    const wantZ = this.pos.z + dirZ * d;
+    let wantX = this.pos.x + dirX * d;
+    let wantZ = this.pos.z + dirZ * d;
     let wantY = targetY + sp * d;
     wantY = Math.max(wantY, world.heightAt(wantX, wantZ) + 0.85);
     /* clear the highest ground between camera and player, so a bank or dune
@@ -359,19 +365,41 @@
       if (h > ridge) ridge = h;
     }
     wantY = Math.max(wantY, ridge + 1.15);
+    /* Rise over your own rooftops if that clears them outright — otherwise pull
+       the boom in until nothing is left between you and the lens. A wall is a
+       hard stop: the ridge/floor rules must never shove us back through one. */
+    if (bld) {
+      let roof = -Infinity;
+      for (let i = 1; i <= 5; i++) {
+        const t = (i / 5) * d;
+        const s = bld.roofAt(this.pos.x + dirX * t, this.pos.z + dirZ * t, 0.5);
+        if (s > roof) roof = s;
+      }
+      if (roof > -Infinity && roof + 1.0 <= targetY + d * 1.4) wantY = Math.max(wantY, roof + 1.0);
+      let n = 0;
+      while (n < 10 && bld.solidAt(wantX, wantY, wantZ, 0.35)) {
+        n++;
+        const t = Math.max(0.6, d * (1 - n / 10));
+        wantX = this.pos.x + dirX * t;
+        wantZ = this.pos.z + dirZ * t;
+        wantY = Math.max(targetY + sp * t, world.heightAt(wantX, wantZ) + 0.85);
+      }
+    }
 
     if (this._firstFrame) {
       this.camPos.set(wantX, wantY, wantZ);
       this.camLook.set(this.pos.x, targetY, this.pos.z);
       this._firstFrame = false;
     } else {
-      const k = 16;
+      /* Follow hard enough that turning feels immediate. The yaw/pitch
+         themselves are already applied with no smoothing at all. */
+      const k = 30;
       this.camPos.x = U.damp(this.camPos.x, wantX, k, dt);
       this.camPos.y = U.damp(this.camPos.y, wantY, k, dt);
       this.camPos.z = U.damp(this.camPos.z, wantZ, k, dt);
-      this.camLook.x = U.damp(this.camLook.x, this.pos.x, 18, dt);
-      this.camLook.y = U.damp(this.camLook.y, targetY, 18, dt);
-      this.camLook.z = U.damp(this.camLook.z, this.pos.z, 18, dt);
+      this.camLook.x = U.damp(this.camLook.x, this.pos.x, 34, dt);
+      this.camLook.y = U.damp(this.camLook.y, targetY, 34, dt);
+      this.camLook.z = U.damp(this.camLook.z, this.pos.z, 34, dt);
     }
     cam.position.copy(this.camPos);
     cam.lookAt(this.camLook);

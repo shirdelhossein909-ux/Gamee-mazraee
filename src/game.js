@@ -328,6 +328,7 @@
     if (IN.pressed('KeyQ')) ui.openPanel('quests');
     if (IN.pressed('KeyP')) ui.openPanel('people');
     if (IN.pressed('KeyN')) ui.toggleMap();
+    if (IN.pressed('KeyJ')) ui.openPanel('jobs');
     if (IN.pressed('Escape')) {
       if (this.ui.map && this.ui.map.open) this.ui.closeMap();
       else if (this.building.placing) this.building.cancel();
@@ -341,7 +342,8 @@
 
     /* hotbar */
     for (let i = 0; i < 9; i++) {
-      if (IN.pressed('Digit' + (i + 1))) ui.select(i);
+      // top row and numeric keypad both pick a tool
+      if (IN.pressed('Digit' + (i + 1)) || IN.pressed('Numpad' + (i + 1))) ui.select(i);
     }
 
     /* R: rotate a ghost, otherwise cycle seed / food */

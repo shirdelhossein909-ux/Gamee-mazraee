@@ -71,6 +71,14 @@
     return Math.abs(x - b.x) <= b.w / 2 + pad && Math.abs(z - b.z) <= b.d / 2 + pad;
   }
 
+  const _bbox = new THREE.Box3();
+  /** how tall this structure actually stands — measured from its geometry */
+  function measureHeight(obj) {
+    _bbox.setFromObject(obj);
+    const h = _bbox.max.y - obj.position.y;
+    return isFinite(h) && h > 0 ? h : 3;
+  }
+
   /** does something solid stand here? gates let the player through */
   Building.prototype.blocks = function (x, z, forPlayer) {
     const arr = this._at(x, z);
@@ -85,11 +93,57 @@
     return false;
   };
 
+  /** is this point in mid-air swallowed by a structure? used by the camera boom */
+  Building.prototype.solidAt = function (x, y, z, pad) {
+    const arr = this._at(x, z);
+    if (!arr) return false;
+    pad = pad || 0;
+    for (const b of arr) {
+      if (b.def.id === 'lamp') continue;
+      if (!inside(b, x, z, pad)) continue;
+      if (y >= b.y - 0.4 && y <= b.y + (b.h || 3) + pad) return true;
+    }
+    return false;
+  };
+
+  /** world-space height of the tallest roof over this spot, or -Infinity */
+  Building.prototype.roofAt = function (x, z, pad) {
+    const arr = this._at(x, z);
+    if (!arr) return -Infinity;
+    let top = -Infinity;
+    for (const b of arr) {
+      if (b.def.id === 'lamp') continue;
+      if (!inside(b, x, z, pad || 0)) continue;
+      const t = b.y + (b.h || 3);
+      if (t > top) top = t;
+    }
+    return top;
+  };
+
   Building.prototype.occupied = function (x, z, pad) {
     const arr = this._at(x, z);
     if (!arr) return false;
     for (const b of arr) if (inside(b, x, z, pad || 0)) return true;
     return false;
+  };
+
+  /* If a point ends up inside a solid footprint — an animal that clipped a
+     doorway, or the player when a wall goes up around them — return the
+     nearest point just outside it, pushed along the shallowest axis. */
+  Building.prototype.escapeFrom = function (x, z, pad) {
+    const arr = this._at(x, z);
+    if (!arr) return null;
+    pad = pad || 0;
+    for (const b of arr) {
+      if (b.def.id === 'lamp') continue;
+      const hw = b.w / 2 + pad, hd = b.d / 2 + pad;
+      const dx = x - b.x, dz = z - b.z;
+      if (Math.abs(dx) >= hw || Math.abs(dz) >= hd) continue;
+      const px = hw - Math.abs(dx), pz = hd - Math.abs(dz);
+      if (px <= pz) return { x: b.x + (dx < 0 ? -1 : 1) * hw * 1.03, z: z };
+      return { x: x, z: b.z + (dz < 0 ? -1 : 1) * hd * 1.03 };
+    }
+    return null;
   };
 
   Building.prototype.structureAt = function (x, z) {
@@ -124,6 +178,48 @@
   };
   Building.prototype.invalidate = function () { this._effCache = null; };
 
+  /* =========================================================
+     WALL CONNECTIONS
+     Fences, walls and gates fill a whole grid cell and grow arms
+     toward their neighbours, so a run of them joins seamlessly.
+     ========================================================= */
+  const DIRS = [[1, 0, 1], [-1, 0, 2], [0, 1, 4], [0, -1, 8]];
+
+  Building.prototype.wallMaskAt = function (x, z, skip) {
+    let m = 0;
+    for (const d of DIRS) {
+      const s = this.structureAt(x + d[0] * GS, z + d[1] * GS);
+      if (s && s !== skip && s.def.connects) m |= d[2];
+    }
+    return m;
+  };
+
+  Building.prototype._reshapeWall = function (b) {
+    const mask = this.wallMaskAt(b.x, b.z, b);
+    if (b.mask === mask) return;
+    b.mask = mask;
+    this.group.remove(b.obj);
+    disposeTree(b.obj);
+    b.obj = M.building(b.defId, b.level, mask);
+    b.obj.position.set(b.x, b.y, b.z);
+    b.obj.rotation.y = 0;                       // shape comes from the mask
+    this.group.add(b.obj);
+    b.glow = [];
+    b.obj.traverse(function (o) {
+      if (o.userData && o.userData.isGlow) { o.material = M.MAT.window; b.glow.push(o); }
+    });
+    b.h = measureHeight(b.obj);
+  };
+
+  /** re-shape the piece at (x,z) and each of its four neighbours */
+  Building.prototype.refreshWalls = function (x, z) {
+    const spots = [[GS, 0], [-GS, 0], [0, GS], [0, -GS], [0, 0]];
+    for (const sp of spots) {
+      const b = this.structureAt(x + sp[0], z + sp[1]);
+      if (b && b.def.connects) this._reshapeWall(b);
+    }
+  };
+
   Building.prototype.wellNear = function (x, z) {
     for (const b of this.list) {
       if (b.defId !== 'well') continue;
@@ -149,7 +245,7 @@
     const ring = M.selectRing();
     ring.scale.set(Math.max(fp.w, fp.d) * 0.9, 1, Math.max(fp.w, fp.d) * 0.9);
     this.group.add(ring);
-    this.placing = { defId: defId, def: def, obj: ghost, ring: ring, rot: 0, valid: false, x: 0, y: 0, z: 0 };
+    this.placing = { defId: defId, def: def, obj: ghost, ring: ring, rot: 0, valid: false, x: 0, y: 0, z: 0, mask: -1 };
     this.showBorder(true);
     this.game.ui.showBuildBar(def);
   };
@@ -239,6 +335,19 @@
     x = Math.round(x / GS) * GS;
     z = Math.round(z / GS) * GS;
 
+    // preview the shape it will take once it links to its neighbours
+    if (p.def.connects) {
+      const mask = this.wallMaskAt(x, z, null);
+      if (mask !== p.mask) {
+        p.mask = mask;
+        this.group.remove(p.obj);
+        disposeTree(p.obj);
+        p.obj = M.building(p.defId, 1, mask);
+        p.obj.traverse(function (o) { if (o.isMesh) { o.material = M.MAT.ghostOk; o.castShadow = false; } });
+        this.group.add(p.obj);
+      }
+      p.rot = 0;
+    }
     const res = this.validate(p.defId, x, z, p.rot, 1);
     p.x = x; p.z = z;
     p.y = res.y !== undefined ? res.y : g.world.heightAt(x, z);
@@ -294,10 +403,16 @@
     obj.traverse(function (o) {
       if (o.userData && o.userData.isGlow) { o.material = M.MAT.window; b.glow.push(o); }
     });
+    b.h = measureHeight(obj);
     this.list.push(b);
     this._index(b, true);
     this.invalidate();
     this._recenter();
+    if (def.connects) {
+      b.mask = -1;
+      this._reshapeWall(b);           // itself, by reference
+      this.refreshWalls(x, z);        // then the four neighbours
+    }
     this.game.bus.emit('build', b);
     return b;
   };
@@ -315,12 +430,13 @@
     b.level++;
     this.group.remove(b.obj);
     disposeTree(b.obj);
-    b.obj = M.building(b.defId, b.level);
+    b.obj = M.building(b.defId, b.level, b.def.connects ? b.mask : undefined);
     b.obj.position.set(b.x, b.y, b.z);
-    b.obj.rotation.y = b.rot;
+    b.obj.rotation.y = b.def.connects ? 0 : b.rot;
     this.group.add(b.obj);
     b.glow = [];
     b.obj.traverse(function (o) { if (o.userData && o.userData.isGlow) b.glow.push(o); });
+    b.h = measureHeight(b.obj);
     b.maxHp = b.def.hp ? b.def.hp(b.level) : 70 * b.level + 40;
     b.hp = b.maxHp;
     this.invalidate();
@@ -356,12 +472,14 @@
         if (k === 'coin') this.game.inv.addCoins(n); else this.game.inv.add(k, n);
       }
     }
+    const wasWall = b.def.connects, wx = b.x, wz = b.z;
     this._index(b, false);
     this.group.remove(b.obj);
     disposeTree(b.obj);
     U.swapRemove(this.list, i);
     this.invalidate();
     this._recenter();
+    if (wasWall) this.refreshWalls(wx, wz);
     this.game.bus.emit('build', b);
   };
 
@@ -565,6 +683,9 @@
       b.hp = Math.min(b.maxHp, r[5] || b.maxHp);
       b.prodT = r[6] || 0;
     }
+    // every piece now knows its neighbours, so link the runs up
+    for (const b of this.list) if (b.def.connects) { b.mask = -1; }
+    for (const b of this.list) if (b.def.connects) this._reshapeWall(b);
     this.invalidate();
   };
 

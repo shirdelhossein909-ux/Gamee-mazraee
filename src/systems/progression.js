@@ -39,15 +39,18 @@
       this.xp -= need;
       this.level++;
       const p = this.game.player;
-      p.maxHp = C.PLAYER.hp + (this.level - 1) * 8;
+      p.maxHp = C.PLAYER.hp + (this.level - 1) * 14;
       p.hp = p.maxHp;
-      p.maxStamina = C.PLAYER.stamina + (this.level - 1) * 5;
+      p.maxStamina = C.PLAYER.stamina + (this.level - 1) * 7;
       p.stamina = p.maxStamina;
       this.game.audio.levelUp();
       this.game.ui.levelUp('سطح ' + U.fa(this.level) + '!');
       need = C.playerXpNeeded(this.level);
     }
   };
+
+  /** every player level makes your hits land harder */
+  Progression.prototype.powerMul = function () { return 1 + (this.level - 1) * 0.06; };
 
   Progression.prototype.skill = function (id) { return this.skills[id] || { xp: 0, level: 1 }; };
 
@@ -238,6 +241,12 @@
     this.questIndex = d.questIndex || 0;
     this.doneQuests = d.doneQuests || Object.create(null);
     this.foodMood = d.foodMood || 0;
+    const p = this.game.player;
+    if (p) {
+      p.maxHp = C.PLAYER.hp + (this.level - 1) * 14;
+      p.maxStamina = C.PLAYER.stamina + (this.level - 1) * 7;
+      p.hp = Math.min(p.hp, p.maxHp);
+    }
     this.recalc();
   };
 

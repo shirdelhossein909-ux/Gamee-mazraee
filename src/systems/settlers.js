@@ -18,6 +18,8 @@
   function Settlers(game) {
     this.game = game;
     this.residents = C.SETTLERS.start;
+    this.jobs = Object.create(null);            // jobId -> how many people on it
+    for (const j of C.JOBS) this.jobs[j.id] = 0;
     this.riders = [];
     this.group = new THREE.Group();
     game.scene.add(this.group);
@@ -44,6 +46,73 @@
     this.game.progress.recalc();
     if (why) this.game.ui.toast('👥 ' + U.fa(n) + ' نفر ' + why, 'gold');
     return n;
+  };
+
+  /* ===================== JOBS ===================== */
+  /* The council table is what lets you give orders at all; its level caps
+     how many of your people can be put on a job at once. */
+  Settlers.prototype.jobSlots = function () {
+    return this.game.building ? this.game.building.totalEffect('jobSlots') : 0;
+  };
+  Settlers.prototype.jobsAssigned = function () {
+    let n = 0;
+    for (const j of C.JOBS) if (j.id !== 'idle') n += this.jobs[j.id] || 0;
+    return n;
+  };
+  Settlers.prototype.jobCapacity = function () {
+    return Math.min(this.population(), this.jobSlots());
+  };
+  Settlers.prototype.freeWorkers = function () {
+    return Math.max(0, this.jobCapacity() - this.jobsAssigned());
+  };
+
+  Settlers.prototype.setJob = function (id, n) {
+    const g = this.game;
+    if (id === 'idle') return false;
+    n = Math.max(0, Math.round(n));
+    const others = this.jobsAssigned() - (this.jobs[id] || 0);
+    const room = this.jobCapacity() - others;
+    if (n > room) {
+      n = Math.max(0, room);
+      if (this.jobSlots() <= 0) g.ui.toast('🪑 اول یک «میز شورا» بساز تا بتوانی وظیفه بدهی', 'bad');
+      else g.ui.toast('👥 نفر آزاد نداری — خانه بساز یا میز شورا را ارتقا بده', 'bad');
+      g.audio.deny();
+    }
+    this.jobs[id] = n;
+    if (g.villagers) g.villagers.timer = 0;      // re-assign right away
+    return true;
+  };
+
+  Settlers.prototype.addJob = function (id, delta) {
+    return this.setJob(id, (this.jobs[id] || 0) + delta);
+  };
+
+  /** people leave and buildings fall — trim assignments back to what we can staff */
+  Settlers.prototype.clampJobs = function () {
+    let over = this.jobsAssigned() - this.jobCapacity();
+    if (over <= 0) return false;
+    const ids = C.JOBS.filter((j) => j.id !== 'idle').map((j) => j.id);
+    while (over > 0) {
+      let big = null;
+      for (const id of ids) if ((this.jobs[id] || 0) > 0 && (!big || this.jobs[id] > this.jobs[big])) big = id;
+      if (!big) break;
+      this.jobs[big]--;
+      over--;
+    }
+    return true;
+  };
+
+  /** flat list of job ids, one slot per villager */
+  Settlers.prototype.jobList = function () {
+    const out = [];
+    this.clampJobs();
+    const cap = this.jobCapacity();
+    for (const j of C.JOBS) {
+      if (j.id === 'idle') continue;
+      let n = this.jobs[j.id] || 0;
+      while (n-- > 0 && out.length < cap) out.push(j.id);
+    }
+    return out;
   };
 
   /* ===================== HIRING A WORKER ===================== */
@@ -253,6 +322,7 @@
   Settlers.prototype.serialize = function () {
     return {
       residents: this.residents,
+      jobs: this.jobs,
       riders: this.riders.map(function (r) {
         return [r.level, r.state === 'idle' ? 'idle' : 'away',
         Math.round(r.trip * 100) / 100, r.tripLen, r.bring];
@@ -264,6 +334,7 @@
     this.riders.length = 0;
     if (!d) { this.residents = C.SETTLERS.start; return; }
     this.residents = d.residents === undefined ? C.SETTLERS.start : d.residents;
+    for (const j of C.JOBS) this.jobs[j.id] = (d.jobs && d.jobs[j.id]) || 0;
     if (d.riders) {
       for (const r of d.riders) {
         this.riders.push({

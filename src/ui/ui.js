@@ -862,6 +862,7 @@
       case 'skills': this.renderSkills(); break;
       case 'quests': this.renderQuests(); break;
       case 'people': this.renderPeople(); break;
+      case 'jobs': this.renderJobs(); break;
       case 'structure': this.renderStructure(); break;
     }
     if (this.game.audio) this.game.audio.click();
@@ -1115,6 +1116,61 @@
         '<div class="qr">پاداش: 💰 ' + U.fa(q.coin) + ' · ⭐ ' + U.fa(q.xp) + ' XP</div>';
       list.appendChild(d);
     }
+  };
+
+  /* ---------------- job board (council table) ---------------- */
+  UI.prototype.renderJobs = function () {
+    const g = this.game, self = this, S = g.settlers;
+    S.clampJobs();                       // never show more workers than we can staff
+    const cap = S.jobCapacity(), used = S.jobsAssigned(), slots = S.jobSlots();
+
+    const cell = (v, l, warn) =>
+      '<div class="pop-cell' + (warn ? ' warn' : '') + '"><b>' + v + '</b><span>' + l + '</span></div>';
+    $('job-hero').innerHTML =
+      cell(U.fa(S.population()), 'اهالی') +
+      cell(U.fa(slots), 'ظرفیت میز شورا') +
+      cell(U.fa(used) + '/' + U.fa(cap), 'مشغول کار') +
+      cell(U.fa(S.freeWorkers()), 'آزاد', S.freeWorkers() === 0 && cap > 0);
+
+    $('job-note').innerHTML = slots > 0
+      ? 'هر نفری که سر کار می‌گذاری خودش در دنیا راه می‌افتد و کارش را می‌کند: چوب‌بر می‌رود سراغ درخت، ' +
+      'سنگ‌کار سراغ صخره، شکارچی دنبال حیوان، کشاورز محصول رسیده را برداشت می‌کند و نگهبان با کمان ' +
+      'از شهر دفاع می‌کند. حاصل کارشان مستقیم به انبار تو اضافه می‌شود.<br>' +
+      'ظرفیت = کمترینِ (تعداد اهالی، ظرفیت میز شورا). میز را ارتقا بده تا بیشتر شود.'
+      : '🔒 برای وظیفه‌دادن اول یک <b>میز شورا</b> بساز (منوی ساخت‌وساز → دستهٔ شهری). ' +
+      'بعد کنار میز برو و کلید <kbd>E</kbd> را بزن.';
+
+    const list = $('job-list');
+    list.innerHTML = '';
+    for (const j of C.JOBS) {
+      if (j.id === 'idle') continue;
+      const n = S.jobs[j.id] || 0;
+      const d = document.createElement('div');
+      d.className = 'job' + (n > 0 ? ' on' : '');
+      d.innerHTML = '<span class="ji">' + j.icon + '</span>' +
+        '<span class="jn"><b>' + j.name + '</b><small>' + j.desc + '</small></span>' +
+        '<span class="jcount">' + U.fa(n) + '</span>';
+      const btns = document.createElement('span');
+      btns.className = 'jbtns';
+      const mk = (label, delta, dis) => {
+        const b = document.createElement('button');
+        b.textContent = label;
+        b.disabled = dis;
+        b.onclick = function () { S.addJob(j.id, delta); self.renderJobs(); g.audio.click(); };
+        btns.appendChild(b);
+      };
+      mk('−', -1, n <= 0);
+      mk('+', 1, S.freeWorkers() <= 0);
+      d.appendChild(btns);
+      list.appendChild(d);
+    }
+
+    const idle = document.createElement('div');
+    idle.className = 'job';
+    idle.innerHTML = '<span class="ji">🚶</span><span class="jn"><b>بی‌کار</b>' +
+      '<small>بقیهٔ اهالی آزادانه در شهر می‌گردند.</small></span>' +
+      '<span class="jcount">' + U.fa(Math.max(0, S.population() - used)) + '</span>';
+    list.appendChild(idle);
   };
 
   /* ---------------- people, riders & vehicles ---------------- */

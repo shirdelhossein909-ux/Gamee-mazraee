@@ -188,7 +188,8 @@
       const job = this.pending.shift();
       if (!this.chunks.has(job.k)) this._buildChunk(job.cx, job.cz);
       n++;
-      if (!all && (n >= 2 || U.now() - t0 > 12)) break;
+      // small budget: a long generation pass shows up as camera lag
+      if (!all && (n >= 1 || U.now() - t0 > 7)) break;
     }
   };
 

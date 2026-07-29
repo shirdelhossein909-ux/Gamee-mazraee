@@ -200,7 +200,11 @@
 
   Audio.prototype._buildAmbient = function () {
     this.wind = this._loopNoise('lowpass', 420, 0.7, 0);
-    this.rain = this._loopNoise('highpass', 1100, 0.5, 0);
+    /* Rain is NOT high-passed noise — that is exactly what TV static is.
+       Real rain is a soft low-passed wash with a slow swell, plus separate
+       droplet transients scheduled in update(). */
+    this.rain = this._loopNoise('lowpass', 780, 0.5, 0);
+    this.rainBody = this._loopNoise('bandpass', 320, 0.6, 0);
     this.water = this._loopNoise('bandpass', 520, 0.9, 0);
     // slow LFO so wind breathes instead of hissing
     const ctx = this.ctx;
@@ -213,6 +217,18 @@
     lfoGain.connect(this.wind.filter.frequency);
     lfo.start();
     this.windLfo = lfo;
+
+    // rain swells and eases instead of sitting at one flat level
+    const rl = ctx.createOscillator();
+    rl.type = 'sine';
+    rl.frequency.value = 0.13;
+    const rlg = ctx.createGain();
+    rlg.gain.value = 190;
+    rl.connect(rlg);
+    rlg.connect(this.rain.filter.frequency);
+    rl.start();
+    this.rainLfo = rl;
+    this._dropT = 0;
   };
 
   const _ramp = (param, v, ctx, time) => {
@@ -296,9 +312,17 @@
     // keep the storm dark and rumbling rather than a harsh hiss
     _ramp(this.wind.filter.frequency, stormy ? 300 : 380, ctx, 2.4);
 
-    /* rain hiss */
-    const rainLvl = w === 'rain' ? 0.07 : stormy ? 0.10 : w === 'snow' ? 0.015 : 0;
+    /* rain: soft wash + body, then discrete droplets on top */
+    const rainLvl = w === 'rain' ? 0.075 : stormy ? 0.105 : w === 'snow' ? 0.012 : 0;
     _ramp(this.rain.gain.gain, rainLvl, ctx, 1.2);
+    _ramp(this.rainBody.gain.gain, rainLvl * 0.55, ctx, 1.2);
+    if (rainLvl > 0.02 && w !== 'snow') {
+      this._dropT -= dt;
+      if (this._dropT <= 0) {
+        this._dropT = (stormy ? 0.045 : 0.085) * (0.5 + Math.random());
+        this.drop();
+      }
+    }
 
     /* water lapping when near a shore */
     const nearWater = g.gather && g.gather.nearWater ? g.gather.nearWater() : false;
@@ -387,6 +411,15 @@
     for (let i = 0; i < 3; i++) {
       this.burst({ freq: f, q: 18, dur: 0.05, gain: 0.11, delay: i * 0.07, bus: this.busAmb });
     }
+  };
+
+  /** a single rain droplet — short, pitched, slightly random */
+  A.drop = function () {
+    const f = 1500 + Math.random() * 2600;
+    this.burst({
+      freq: f, to: f * 0.45, q: 5.5, dur: 0.035 + Math.random() * 0.03,
+      gain: 0.012 + Math.random() * 0.016, attack: 0.002, bus: this.busAmb
+    });
   };
 
   A.thunder = function () {
