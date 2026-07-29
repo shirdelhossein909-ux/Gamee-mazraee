@@ -376,8 +376,10 @@
     /* left click */
     if (IN.clicked(0)) {
       if (this.building.placing) this.building.confirm();
-      else if (this.player.mount) { /* hands are on the wheel */ }
-      else {
+      else if (this.player.mount) {
+        // hands are on the reins — but you can always eat in the saddle
+        if (ui.currentTool() === 'food') { ui.swingSlot(); this.gather.eat(); }
+      } else {
         ui.swingSlot();
         this.gather.use(ui.currentTool());
       }
@@ -411,6 +413,13 @@
     this._last = now;
     if (dt > 0.1) dt = 0.1;            // never simulate huge steps after a stall
 
+    /* A rolling read on how much room this machine has to spare. When frames
+       are already running long, world streaming stands down for a beat rather
+       than piling generation work on top — that is what used to make the
+       camera feel like it seized up as you walked into new ground. */
+    this._frameAvg = this._frameAvg === undefined ? dt : this._frameAvg * 0.9 + dt * 0.1;
+    this._lateFrame = this._frameAvg > 0.026;
+
     if (this.started) this.update(dt);
     if (this.renderer && this.scene && this.camera) this.renderer.render(this.scene, this.camera);
     G.Input.endFrame();
@@ -422,7 +431,7 @@
     this.vehicles.update(dt);
     this.horses.update(dt);
     this.player.update(dt);
-    this.world.update(dt, this.player.pos.x, this.player.pos.z);
+    this.world.update(dt, this.player.pos.x, this.player.pos.z, this._lateFrame);
     this.sky.update(dt, this.player.pos);
     this.wildlife.update(dt);
     this.villagers.update(dt);

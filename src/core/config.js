@@ -678,7 +678,8 @@
   C.PLAYER = {
     speed: 6.2, runMul: 1.75, jump: 8.4, gravity: 24,
     hp: 100, energy: 100, stamina: 100,
-    reach: 5.5, height: 1.8
+    reach: 5.5, height: 1.8,
+    keyLook: 2.1                  // radians/sec of camera turn from the arrow keys
   };
 
   G.Config = C;

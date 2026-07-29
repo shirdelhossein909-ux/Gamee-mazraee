@@ -401,7 +401,8 @@
 
     this._hoofT = (this._hoofT || 0) - dt;
     if (this._hoofT <= 0 && h.speed > 2) { this._hoofT = gallop ? 0.28 : 0.42; g.audio.hoof(); }
-    p.energy = Math.max(0, p.energy - dt * 0.06 * (h.speed / H.speed));
+    /* the horse does the work, not you — riding costs nothing and the
+       saddle is where you get your wind back */
   };
 
   /* ===================== PERSISTENCE ===================== */

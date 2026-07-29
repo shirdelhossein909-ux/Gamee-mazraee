@@ -29,6 +29,8 @@
     this.group.name = 'world';
     this.chunks = new Map();     // "cx,cz" -> chunk
     this.pending = [];
+    this.unpopulated = [];         // ground down, props still owed
+    this._starved = 0;
     this.nodes = new Map();      // nodeId -> node
     this.harvested = Object.create(null); // nodeId -> in-game day it returns
     this.viewRadius = W.viewRadius;
@@ -146,7 +148,7 @@
     return U.key(Math.floor(x / W.chunkSize + 0.5), Math.floor(z / W.chunkSize + 0.5));
   };
 
-  World.prototype.update = function (dt, px, pz) {
+  World.prototype.update = function (dt, px, pz, lateFrame) {
     // water follows the camera & animates
     if (this._waterTime) this._waterTime.value += dt;
     this.water.position.x = Math.round(px / 8) * 8;
@@ -157,7 +159,7 @@
       this._lastCx = cx; this._lastCz = cz;
       this._refresh(cx, cz);
     }
-    this._flushQueue();
+    this._flushQueue(false, lateFrame);
   };
 
   World.prototype._refresh = function (cx, cz) {
@@ -179,21 +181,53 @@
     for (const k of dead) this._disposeChunk(k);
   };
 
-  /** generate a few chunks per frame so streaming never stalls the loop */
-  World.prototype._flushQueue = function (all) {
-    if (!this.pending.length) return;
-    const t0 = U.now();
-    let n = 0;
-    while (this.pending.length) {
-      const job = this.pending.shift();
-      if (!this.chunks.has(job.k)) this._buildChunk(job.cx, job.cz);
-      n++;
-      // small budget: a long generation pass shows up as camera lag
-      if (!all && (n >= 1 || U.now() - t0 > 7)) break;
+  /* Streaming, split so no single frame carries a whole chunk.
+
+     Ground geometry and the trees/rocks that stand on it each cost a few
+     milliseconds. Doing both together overran the frame every time you
+     crossed a chunk boundary, and since crossing one queues a whole new row
+     of chunks the overrun repeated for several frames in a row — which is
+     what made the camera feel like it locked up while walking. Now a frame
+     does one half of one chunk, and it does nothing at all on a frame that
+     is already running late. */
+  World.prototype._flushQueue = function (all, lateFrame) {
+    if (all) {
+      while (this.pending.length) {
+        const job = this.pending.shift();
+        if (!this.chunks.has(job.k)) this._buildChunk(job.cx, job.cz);
+      }
+      while (this.unpopulated.length) this._populateChunk(this.unpopulated.shift(), 0);
+      return;
     }
+    if (!this.pending.length && !this.unpopulated.length) { this._starved = 0; return; }
+    /* Standing down is only ever a delay. On a machine that never has a
+       spare frame this would otherwise stall the world forever, so after a
+       few skips we build regardless — a brief hitch beats missing ground. */
+    if (lateFrame && ++this._starved < 4) return;
+    this._starved = 0;
+
+    // props for a chunk whose ground is already down come first: it is
+    // already visible, and bare ground reads as a bug
+    if (this.unpopulated.length) {
+      if (this._populateChunk(this.unpopulated[0])) this.unpopulated.shift();
+      return;
+    }
+    const job = this.pending.shift();
+    if (!this.chunks.has(job.k)) this._buildChunk(job.cx, job.cz);
   };
 
-  World.prototype.generateAll = function () { this._flushQueue(true); };
+  /* Build the whole starting neighbourhood up front, ground and props alike.
+     The opening quests need the guaranteed trees and rocks at the homestead
+     to exist the moment the player takes their first step — streaming them
+     in a slice at a time is for ground you walk towards later. */
+  World.prototype.generateAll = function (cx, cz) {
+    // default to wherever we are already centred; 0,0 only on a cold world
+    const fresh = this._lastCx === 9999;
+    this._lastCx = cx !== undefined ? cx : (fresh ? 0 : this._lastCx);
+    this._lastCz = cz !== undefined ? cz : (fresh ? 0 : this._lastCz);
+    this._refresh(this._lastCx, this._lastCz);
+    this._flushQueue(true);
+  };
 
   World.prototype._buildChunk = function (cx, cz) {
     const size = W.chunkSize, segs = W.segments;
@@ -235,18 +269,43 @@
     this.group.add(chunk.group);
     this.chunks.set(chunk.key, chunk);
 
-    this._populate(chunk, ox, oz, size);
+    // props follow on a later frame — see _flushQueue
+    this.unpopulated.push(chunk);
     return chunk;
   };
 
-  /* ---------------- resource nodes & decoration ---------------- */
-  World.prototype._populate = function (chunk, ox, oz, size) {
-    const rnd = U.rng(U.strSeed('c' + chunk.cx + '_' + chunk.cz + '_' + this.seed));
-    const day = this.game.time ? this.game.time.day : 0;
-    const tufts = [];
-    const tries = 46;
+  /* Props are by far the costliest part of a chunk — every tree and rock is
+     its own merged geometry — so they are laid down a slice at a time.
+     Returns true once the chunk is finished. */
+  World.prototype._populateChunk = function (chunk, slice) {
+    if (!chunk || chunk.populated) return true;
+    if (!this.chunks.has(chunk.key)) { chunk.populated = true; return true; }
+    const size = W.chunkSize;
+    const done = this._populate(chunk, chunk.cx * size, chunk.cz * size, size,
+      slice === undefined ? PROP_SLICE : slice);
+    if (done) chunk.populated = true;
+    return done;
+  };
 
-    for (let i = 0; i < tries; i++) {
+  /* ---------------- resource nodes & decoration ---------------- */
+  const PROP_TRIES = 46;
+  const PROP_SLICE = 10;               // props attempted per frame
+  World.prototype._populate = function (chunk, ox, oz, size, slice) {
+    let st = chunk.popState;
+    if (!st) {
+      st = chunk.popState = {
+        i: 0,
+        rnd: U.rng(U.strSeed('c' + chunk.cx + '_' + chunk.cz + '_' + this.seed)),
+        tufts: []
+      };
+    }
+    const rnd = st.rnd;
+    const day = this.game.time ? this.game.time.day : 0;
+    const tufts = st.tufts;
+    const tries = PROP_TRIES;
+    const stop = slice > 0 ? Math.min(tries, st.i + slice) : tries;
+
+    for (let i = st.i; i < stop; i++) {
       const x = ox + (rnd() - 0.5) * size;
       const z = oz + (rnd() - 0.5) * size;
       const h = this.heightAt(x, z);
@@ -274,11 +333,16 @@
         tufts.push({ x: x, y: h, z: z, c: rnd() > 0.5 ? b.c1 : b.c2, r0: rnd() * 6.28, r1: rnd(), r2: rnd() });
       }
     }
+    st.i = stop;
+    if (st.i < tries) return false;                  // more slices to come
+
     if (tufts.length) {
       const gm = M.grassField(tufts);
       if (gm) { gm.matrixAutoUpdate = false; gm.updateMatrix(); chunk.group.add(gm); chunk.grass = gm; }
     }
     if (chunk.cx === 0 && chunk.cz === 0) this._starterProps(chunk, day);
+    chunk.popState = null;
+    return true;
   };
 
   /* The very first chunk always carries a guaranteed starter kit of trees,
@@ -368,6 +432,8 @@
     const ch = this.chunks.get(key);
     if (!ch) return;
     for (const n of ch.nodes) this.nodes.delete(n.id);
+    const q = this.unpopulated.indexOf(ch);
+    if (q >= 0) this.unpopulated.splice(q, 1);
     this.group.remove(ch.group);
     disposeObj(ch.group);
     this.chunks.delete(key);

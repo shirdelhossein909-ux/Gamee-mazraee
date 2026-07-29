@@ -116,14 +116,27 @@
     held: function (b) { return this.enabled && !!this.buttons[b || 0]; },
 
     /** movement axes from WASD + arrows, in local screen space */
+    /* WASD walks. The arrow keys steer the camera instead (see lookAxis) —
+       a keyboard alternative to the mouse, for anyone who would rather not
+       hold the pointer down while they play. */
     axis: function () {
       let x = 0, y = 0;
-      if (this.down('KeyW') || this.down('ArrowUp')) y += 1;
-      if (this.down('KeyS') || this.down('ArrowDown')) y -= 1;
-      if (this.down('KeyA') || this.down('ArrowLeft')) x -= 1;
-      if (this.down('KeyD') || this.down('ArrowRight')) x += 1;
+      if (this.down('KeyW')) y += 1;
+      if (this.down('KeyS')) y -= 1;
+      if (this.down('KeyA')) x -= 1;
+      if (this.down('KeyD')) x += 1;
       const l = Math.hypot(x, y);
       if (l > 1) { x /= l; y /= l; }
+      return { x: x, y: y };
+    },
+
+    /** camera look from the arrow keys, in the same units as mouse movement */
+    lookAxis: function () {
+      let x = 0, y = 0;
+      if (this.down('ArrowLeft')) x -= 1;
+      if (this.down('ArrowRight')) x += 1;
+      if (this.down('ArrowUp')) y -= 1;
+      if (this.down('ArrowDown')) y += 1;
       return { x: x, y: y };
     },
 

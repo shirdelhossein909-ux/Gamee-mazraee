@@ -114,16 +114,29 @@
     if (IN.enabled) {
       this.camYaw -= IN.dx * sens;
       this.camPitch = U.clamp(this.camPitch + IN.dy * sens, -0.85, 1.15);
+      /* arrow keys drive the same rig as the mouse, scaled per second so the
+         speed is identical whatever the frame rate */
+      const la = IN.lookAxis();
+      if (la.x || la.y) {
+        const ks = C.PLAYER.keyLook * IN.sensitivity * dt;
+        this.camYaw -= la.x * ks;
+        this.camPitch = U.clamp(this.camPitch + la.y * ks, -0.85, 1.15);
+      }
       if (IN.wheel) this.camWant = U.clamp(this.camWant + IN.wheel * 1.1, 2.2, 18);
     }
     this.camDist = U.damp(this.camDist, this.camWant, 14, dt);
 
-    /* ---- riding: the vehicle drives, we just sit and look ---- */
+    /* ---- riding: the mount drives, we just sit and look ---- */
     if (this.mount) {
       this.hurtCooldown = Math.max(0, this.hurtCooldown - dt);
       this.attackCooldown = Math.max(0, this.attackCooldown - dt);
       this.swimming = false;
       this.onGround = true;
+      /* Sitting in a saddle is rest: stamina comes back faster than walking
+         and the usual food/health tick keeps running. Skipping it used to
+         leave you unable to recover at all while mounted. */
+      this.stamina = Math.min(this.maxStamina, this.stamina + dt * 15);
+      this._vitals(dt, false);
       this._rideAnim(dt);
       this._camera(dt);
       return;
@@ -238,17 +251,21 @@
     /* ---- vitals ---- */
     this.hurtCooldown = Math.max(0, this.hurtCooldown - dt);
     this.attackCooldown = Math.max(0, this.attackCooldown - dt);
-    this.energyTick += dt;
-    if (this.energyTick > 4) {
-      this.energyTick = 0;
-      this.energy = Math.max(0, this.energy - (moving ? 0.55 : 0.3));
-      if (this.energy <= 0) this.hp = Math.max(1, this.hp - 1);
-      else if (this.energy > 40 && this.hp < this.maxHp) this.hp = Math.min(this.maxHp, this.hp + 0.8);
-    }
+    this._vitals(dt, moving);
 
     /* ---- animation ---- */
     this._animate(dt, moving, canRun);
     this._camera(dt);
+  };
+
+  /** hunger burn and the slow heal it pays for — runs on foot and in the saddle */
+  Player.prototype._vitals = function (dt, moving) {
+    this.energyTick += dt;
+    if (this.energyTick <= 4) return;
+    this.energyTick = 0;
+    this.energy = Math.max(0, this.energy - (moving ? 0.55 : 0.3));
+    if (this.energy <= 0) this.hp = Math.max(1, this.hp - 1);
+    else if (this.energy > 40 && this.hp < this.maxHp) this.hp = Math.min(this.maxHp, this.hp + 0.8);
   };
 
   /** blocked only by solid buildings — deep water is swimmable */

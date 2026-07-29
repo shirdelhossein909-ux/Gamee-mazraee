@@ -276,6 +276,10 @@
      the remaining 8h — a plain sine would always give an even 12/12 split. */
   const DAY_SPAN = T.dayEnd - T.dayStart;
   const NIGHT_SPAN = 24 - DAY_SPAN;
+  /* how low the shadow light may ever hang, and how far it swings sideways.
+     Both keep shadows short and slow — see the note in apply(). */
+  const SHADOW_MIN_Y = 0.80;
+  const SHADOW_SWEEP = 0.45;
   Sky.prototype.sunAngle = function (h) {
     if (h >= T.dayStart && h < T.dayEnd) return ((h - T.dayStart) / DAY_SPAN) * Math.PI;
     const t = h < T.dayStart ? (h + 24 - T.dayEnd) : (h - T.dayEnd);
@@ -306,15 +310,50 @@
     const below = sy < 0;
     const lx = below ? -upX : upX, ly = below ? -upY : upY, lz = below ? -upZ : upZ;
 
-    /* Snap the shadow frustum to whole texels. Without this the depth map
-       slides a fraction of a texel every frame as you walk and the shadow
-       edges visibly crawl, like clouds drifting over the ground. */
+    /* ---- the shadow-casting direction is NOT the visual sun's ----
+       A day here lasts twelve real minutes, so the real sun sweeps the sky
+       a hundred times faster than life. Shadows that track it 1:1 visibly
+       crawl across the ground while you stand still — and worst of all near
+       dawn and dusk, where a shallow sun makes shadows enormously long and
+       multiplies every degree of rotation into metres of travel.
+
+       So the disc in the sky keeps its true arc (that is what sells the time
+       of day) while the light that casts shadows rides a compressed one: it
+       never drops below SHADOW_MIN_Y and swings through a fraction of the
+       azimuth. Shadows still lean the right way morning and evening, they
+       stay a believable length, and they no longer wander. */
+    const dLen = Math.hypot(lx, lz) || 1;
+    const sMinY = SHADOW_MIN_Y;
+    const shY = Math.max(sMinY, Math.abs(ly));
+    const flat = Math.sqrt(Math.max(0, 1 - shY * shY)) * SHADOW_SWEEP;
+    const shX = (lx / dLen) * flat, shZ = (lz / dLen) * flat;
+    const shLen = Math.hypot(shX, shY, shZ) || 1;
+    const ux = shX / shLen, uy = shY / shLen, uz = shZ / shLen;
+
+    /* Snap the frustum centre to whole texels *along the shadow map's own
+       axes*. Snapping in world X/Z (which is what this used to do) lands
+       between texels whenever the light is not axis-aligned, and the map
+       still swims a fraction of a texel as you walk. */
     const cam = this.sun.shadow.camera;
     const texel = (cam.right - cam.left) / this.sun.shadow.mapSize.x;
-    const snap = Math.max(0.05, texel * 8);
-    const sxp = Math.round(px / snap) * snap;
-    const szp = Math.round(pz / snap) * snap;
-    this.sun.position.set(sxp + lx * 120, ly * 130 + 12, szp + lz * 120);
+    const snap = Math.max(0.05, texel * 4);
+    // shadow-space basis: right = up × dir, then forward = dir × right
+    let rx = -uz, rz = ux;                    // (0,1,0) × dir, flattened
+    const rl = Math.hypot(rx, rz) || 1;
+    rx /= rl; rz /= rl;
+    const fx = uy * rz, fy = uz * rx - ux * rz, fz = -uy * rx;
+    const fl = Math.hypot(fx, fy, fz) || 1;
+    const gx = fx / fl, gz = fz / fl;
+    // project the follow point onto that basis, round, project back
+    const su = Math.round((px * rx + pz * rz) / snap) * snap;
+    const sv = Math.round((px * gx + pz * gz) / snap) * snap;
+    const det = rx * gz - rz * gx;
+    let sxp = px, szp = pz;
+    if (Math.abs(det) > 1e-6) {
+      sxp = (su * gz - sv * rz) / det;
+      szp = (sv * rx - su * gx) / det;
+    }
+    this.sun.position.set(sxp + ux * 120, uy * 130 + 12, szp + uz * 120);
     this.sun.target.position.set(sxp, 0, szp);
     this.sun.target.updateMatrixWorld();
 
