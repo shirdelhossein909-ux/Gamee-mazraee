@@ -479,10 +479,7 @@
     // swing from the player's chest, not from the camera behind them
     const from = new THREE.Vector3(p.pos.x, p.pos.y + 1.2, p.pos.z);
     const hit = g.wildlife.rayPick(from, ray.dir, st.range + 1.5);
-    /* Hunting on foot was trivially easy, so a blow lands at a fraction of
-       its old force. Skill and level still multiply it, so a seasoned
-       hunter beats a beginner by more than ever. */
-    const dmg = st.damage * (1 + prog.skill('combat').level * 0.05) * prog.powerMul() / C.HUNT_DIFFICULTY;
+    const dmg = st.damage * (1 + prog.skill('combat').level * 0.05) * prog.powerMul();
     if (hit) g.wildlife.hit(hit.animal, dmg, p.pos.x, p.pos.z);
     else {
       // wide sweep fallback so melee still connects at close range
@@ -506,10 +503,7 @@
       p.pos.y + 1.35 + ray.dir.y * 0.9,
       p.pos.z + ray.dir.z * 0.9
     );
-    /* Hunting on foot was trivially easy, so a blow lands at a fraction of
-       its old force. Skill and level still multiply it, so a seasoned
-       hunter beats a beginner by more than ever. */
-    const dmg = st.damage * (1 + prog.skill('combat').level * 0.05) * prog.powerMul() / C.HUNT_DIFFICULTY;
+    const dmg = st.damage * (1 + prog.skill('combat').level * 0.05) * prog.powerMul();
     g.wildlife.shoot(origin, ray.dir.clone(), dmg, st.range);
   };
 

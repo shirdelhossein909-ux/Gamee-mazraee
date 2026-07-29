@@ -447,7 +447,10 @@
     if (dx * dx + dz * dz > (HUNT_RANGE + 4) * (HUNT_RANGE + 4)) return;   // still closing in
     v.yaw += U.angleDelta(v.yaw, Math.atan2(dx, dz)) * Math.min(1, dt * 8);
     if (v.shootCd > 0) return;
-    v.shootCd = 2.2;
+    /* Village hunters draw a good deal slower than they used to — meat was
+       arriving faster than anything else in the game. An expert still nocks
+       arrows quicker than a plain hand. */
+    v.shootCd = 2.2 * C.HUNTER_SLOW / (v.expert ? C.EXPERT.tickMul : 1);
     v.swingAnim = 1;
     const dy = (a.y + a.def.size * 0.5) - (v.y + 1.3);
     const l = Math.hypot(dx, dy, dz) || 1;

@@ -2,62 +2,56 @@
 rem =====================================================================
 rem   کِشتوَر — Keshtvar
 rem
-rem   Double-click to play. This relaunches itself hidden, so no black
-rem   console window sits on screen while you play, then opens the game
-rem   in its own app window — no tabs, no address bar — when Chrome,
-rem   Edge or Brave is installed.
+rem   Double-click to play. The game opens in its own window — no tabs,
+rem   no address bar — and this console closes straight away.
+rem
+rem   An earlier version wrote a small .vbs helper to relaunch itself
+rem   hidden. `echo` writes through the console codepage, so a folder
+rem   name with Persian characters came out mangled and Windows Script
+rem   Host reported "cannot find the file specified". Nothing is written
+rem   to disk here any more: every path goes straight to CreateProcess,
+rem   which is Unicode end to end.
 rem =====================================================================
 
-rem --- second pass: the real work, running hidden ---
-if "%~1"=="--run" goto RUN
+rem clear away the helper the old version left behind
+if exist "%~dp0.launch.vbs" del /f /q "%~dp0.launch.vbs" >nul 2>nul
 
-rem --- first pass: hide ourselves and re-enter ---
-cd /d "%~dp0"
-> "%~dp0.launch.vbs" echo Set s = CreateObject("Wscript.Shell")
->>"%~dp0.launch.vbs" echo s.Run """%~f0"" --run", 0, False
-start "" /min wscript.exe "%~dp0.launch.vbs"
-exit /b
+rem file:// is enough on its own — saves live in the browser profile
+rem below, so there is no local web server and no Python needed.
+set "URL=file:///%~dp0index.html"
+set "URL=%URL:\=/%"
 
-:RUN
-cd /d "%~dp0"
-del "%~dp0.launch.vbs" >nul 2>nul
+rem The game gets its own browser profile on an ASCII path, so it always
+rem opens a clean window and never disturbs your normal browsing.
+set "PROFILE=%LOCALAPPDATA%\Keshtvar\browser"
 
-set PORT=8731
-set PY=
-where py       >nul 2>nul && set PY=py -3
-if "%PY%"==""  (where python  >nul 2>nul && set PY=python)
-if "%PY%"==""  (where python3 >nul 2>nul && set PY=python3)
+rem %ProgramFiles(x86)% is copied out first: the ")" in its name breaks
+rem batch parsing if it is ever undefined inside a block.
+set "PF=%ProgramFiles%"
+set "PF86=%ProgramFiles(x86)%"
+set "LAD=%LocalAppData%"
 
-rem --- a browser we can open in app mode: own window, no browser UI ---
-set BROWSER=
-for %%B in (
-  "%ProgramFiles%\Google\Chrome\Application\chrome.exe"
-  "%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe"
-  "%LocalAppData%\Google\Chrome\Application\chrome.exe"
-  "%ProgramFiles%\Microsoft\Edge\Application\msedge.exe"
-  "%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe"
-  "%ProgramFiles%\BraveSoftware\Brave-Browser\Application\brave.exe"
-) do if not defined BROWSER if exist %%B set BROWSER=%%B
+rem A Chromium-family browser gives us --app: a bare window, no browser UI.
+set "BROWSER="
+call :pick "%PF%\Google\Chrome\Application\chrome.exe"
+call :pick "%PF86%\Google\Chrome\Application\chrome.exe"
+call :pick "%LAD%\Google\Chrome\Application\chrome.exe"
+call :pick "%PF%\Microsoft\Edge\Application\msedge.exe"
+call :pick "%PF86%\Microsoft\Edge\Application\msedge.exe"
+call :pick "%PF%\BraveSoftware\Brave-Browser\Application\brave.exe"
+call :pick "%LAD%\BraveSoftware\Brave-Browser\Application\brave.exe"
 
-if "%PY%"=="" goto NOSERVER
+if not defined BROWSER goto PLAIN
 
-rem serve quietly in the background so the browser allows saved games
-start "" /b %PY% -m http.server %PORT% --bind 127.0.0.1 >nul 2>nul
-rem let the socket come up before pointing a window at it
-ping -n 2 127.0.0.1 >nul
-set URL=http://127.0.0.1:%PORT%/index.html
-goto OPEN
+start "" "%BROWSER%" --app="%URL%" --user-data-dir="%PROFILE%" --allow-file-access-from-files --window-size=1600,900
+exit
 
-:NOSERVER
-rem no Python: open the file directly. It all plays, but the browser may
-rem refuse to keep saved games on file://
-set URL=file:///%~dp0index.html
-set URL=%URL:\=/%
+:PLAIN
+rem no Chromium-family browser installed: hand it to whatever opens .html
+start "" "%~dp0index.html"
+exit
 
-:OPEN
-if defined BROWSER (
-  start "" %BROWSER% --app="%URL%" --window-size=1600,900
-) else (
-  start "" "%URL%"
-)
-exit /b
+:pick
+if defined BROWSER goto :eof
+if exist %1 set "BROWSER=%~1"
+goto :eof

@@ -690,9 +690,9 @@
        specialist : x1.5 faster again x2 the load = 3x a plain hand      */
   C.WORKER = { tickMul: 2.0, yieldMul: 1.75 };
   C.EXPERT = { tickMul: 1.5, yieldMul: 2.0 };
-  /* Hunting on foot was trivial, so every blow you land on an animal is
-     quartered. Villager hunters are untouched — they were well paced. */
-  C.HUNT_DIFFICULTY = 4;
+  /* How much slower a village hunter shoots than they used to. Your own
+     hunting is untouched — it was already well judged. */
+  C.HUNTER_SLOW = 3;
   /* Market multipliers on an item's base value. Buying costs more than it
      did and more than selling returns, so coins have to be earned. */
   C.PRICE = { sell: 1.6, buy: 3.4 };
