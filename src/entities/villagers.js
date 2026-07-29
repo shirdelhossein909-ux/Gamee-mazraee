@@ -24,6 +24,10 @@
     guard: { shirt: 0x8a3a3a, hat: 0x6a6a72 }
   };
   const HUNT_RANGE = 9;      // a hunter draws his bow from here
+  /* straight on first, then wider and wider sidesteps around an obstacle */
+  const SIDESTEPS = [0, 0.6, -0.6, 1.2, -1.2, 1.9, -1.9];
+  const STUCK_GIVEUP = 3.0;  // seconds of getting nowhere before writing a target off
+  const SKIP_FOR = 75;       // and how long to leave it alone afterwards
 
   function Villagers(game) {
     this.game = game;
@@ -64,6 +68,7 @@
 
     for (const v of this.list) {
       v.mul = v.horse ? 2.3 : 1;                  // a rider covers ground faster
+      if (v.skip) for (const k in v.skip) { if ((v.skip[k] -= dt) <= 0) delete v.skip[k]; }
       v.think -= dt;
       if (v.think <= 0) {
         v.think = 2.5 + Math.random() * 3;
@@ -94,15 +99,27 @@
         if (v.swing <= 0) { v.swing = 0.75; v.swingAnim = 1; }
         if (v.workT >= C.JOB_TICK) { v.workT = 0; this._yield(v); }
       } else if (d > 1.1) {
-        const nx = v.x + (dx / d) * v.speed * v.mul * dt, nz = v.z + (dz / d) * v.speed * v.mul * dt;
-        const nh = world.heightAt(nx, nz);
-        if (nh > C.WORLD.waterLevel + 0.2 && Math.abs(nh - v.y) < 1.8 &&
-          !(g.building && g.building.blocks(nx, nz, true))) {
-          v.x = nx; v.z = nz; v.y = nh; moving = true;
-        } else { v.think = 0; }
+        const step = v.speed * v.mul * dt;
+        if (this._tryStep(v, dx / d, dz / d, step, world)) {
+          moving = true;
+          v.stuckT = 0;
+        } else {
+          /* Boxed in. Sidestepping handles a rock or a wall in the way, but a
+             vein partway up a cliff can never be reached at all — and picking
+             the *nearest* node every time would send this worker back to the
+             same impossible spot forever. Give up on it and let someone else
+             have a turn at a different one. */
+          v.stuckT = (v.stuckT || 0) + dt;
+          if (v.stuckT > STUCK_GIVEUP) {
+            v.stuckT = 0;
+            this._giveUp(v);
+          }
+          v.think = Math.min(v.think, 0.35);
+        }
         v.yaw += U.angleDelta(v.yaw, Math.atan2(dx, dz)) * Math.min(1, dt * 8);
       } else if (v.job !== 'idle' && v.hasTarget) {
         v.working = true;                      // arrived — get to work
+        v.stuckT = 0;
       }
 
       /* guards and hunters shoot rather than walk into a bear's jaws */
@@ -149,6 +166,37 @@
       ud.armR.rotation.x = U.damp(ud.armR.rotation.x, sw * 0.8, 10, dt);
     }
     ud.torso.position.y = 0.86 + (moving ? Math.abs(Math.sin(v.phase)) * 0.04 : 0);
+  };
+
+  /* One walking step, sidestepping whatever is in the way. Returns false only
+     when nothing within a wide arc is walkable. */
+  Villagers.prototype._tryStep = function (v, dx, dz, step, world) {
+    const g = this.game;
+    const walkable = (x, z) => {
+      const h = world.heightAt(x, z);
+      return h > C.WORLD.waterLevel + 0.2 && Math.abs(h - v.y) < 1.8 &&
+        !(g.building && g.building.blocks(x, z, true));
+    };
+    for (const turn of SIDESTEPS) {
+      const c = Math.cos(turn), s = Math.sin(turn);
+      const ax = dx * c - dz * s, az = dx * s + dz * c;
+      const nx = v.x + ax * step, nz = v.z + az * step;
+      if (!walkable(nx, nz)) continue;
+      v.x = nx; v.z = nz; v.y = world.heightAt(nx, nz);
+      return true;
+    }
+    return false;
+  };
+
+  /** write off the current target and go find another */
+  Villagers.prototype._giveUp = function (v) {
+    if (!v.skip) v.skip = Object.create(null);
+    const id = v.node ? v.node.id : (v.plot ? 'p' + v.plot.gx + ',' + v.plot.gz : null);
+    if (id !== null) v.skip[id] = SKIP_FOR;
+    v.node = null; v.plot = null; v.prey = null;
+    v.hasTarget = false;
+    v.working = false;
+    v.think = 0;
   };
 
   /* ===================== HORSES ===================== */
@@ -231,7 +279,7 @@
         break;
       }
       case 'farm': {
-        const plot = this._ripePlot(v);
+        const plot = this._farmJob(v);
         if (plot) {
           v.plot = plot;
           v.hasTarget = true;
@@ -265,23 +313,38 @@
 
   Villagers.prototype._nearestNode = function (v, kind, radius) {
     const list = this.game.world.nodesNear(v.x, v.z, radius);
+    const skip = v.skip;
     let best = null, bd = radius * radius;
     for (const n of list) {
       if (n.kind !== kind) continue;
+      if (skip && skip[n.id] > 0) continue;        // proved unreachable lately
       const d = U.dist2(v.x, v.z, n.x, n.z);
       if (d < bd) { bd = d; best = n; }
     }
     return best;
   };
 
-  Villagers.prototype._ripePlot = function (v) {
-    const f = this.game.farming;
-    let best = null, bd = 90 * 90;
+  /* What is there to do on the farm? Ripe crops first, then thirsty ones,
+     then bare tilled soil waiting on seed — a farmhand who only ever
+     harvested looked broken on a field that was still growing. */
+  Villagers.prototype._farmJob = function (v) {
+    const f = this.game.farming, inv = this.game.inv;
+    const skip = v.skip;
+    let best = null, bd = 1e9, bestRank = 9;
+    const hasSeed = inv.selectedSeed && inv.count(inv.selectedSeed) > 0;
     f.plots.forEach(function (p) {
-      if (!p.crop || p.stage < 3) return;
+      const id = 'p' + p.gx + ',' + p.gz;
+      if (skip && skip[id] > 0) return;
+      let rank;
+      if (p.crop && p.stage >= 3) rank = 0;                 // harvest
+      else if (p.crop && p.moisture < 0.3) rank = 1;        // water
+      else if (!p.crop && hasSeed) rank = 2;                // sow
+      else return;
       const d = U.dist2(v.x, v.z, p.x, p.z);
-      if (d < bd) { bd = d; best = p; }
+      if (d > 90 * 90) return;
+      if (rank < bestRank || (rank === bestRank && d < bd)) { bestRank = rank; bd = d; best = p; }
     });
+    if (best) v.farmAct = bestRank;
     return best;
   };
 
@@ -290,9 +353,11 @@
     const g = this.game;
     const skillBonus = 1 + g.progress.skill('building').level * 0.02;
     const got = [];
+    let full = false;
     const give = (id, n) => {
       n = Math.max(1, Math.round(n * skillBonus));
-      if (g.inv.add(id, n)) got.push(C.ITEMS[id].icon + U.fa(n));
+      if (g.inv.add(id, n, true)) got.push(C.ITEMS[id].icon + U.fa(n));
+      else full = true;
     };
 
     switch (v.job) {
@@ -316,8 +381,14 @@
         return;                              // _hunt() shoots; the kill drops the meat
       case 'farm': {
         const p = v.plot;
-        if (!p || !p.crop || p.stage < 3) { v.think = 0; return; }
-        g.farming.harvest(p);
+        if (!p) { v.think = 0; v.working = false; return; }
+        if (p.crop && p.stage >= 3) g.farming.harvest(p);
+        else if (p.crop && p.moisture < 0.3) {
+          /* the farmhand carries their own water — no bucket errands */
+          p.moisture = Math.min(1, p.moisture + 0.85);
+        } else if (!p.crop && g.inv.selectedSeed && g.inv.count(g.inv.selectedSeed) > 0) {
+          g.farming.plant(p, g.inv.selectedSeed);
+        }
         v.think = 0; v.working = false;
         return;
       }
@@ -328,6 +399,13 @@
       g.progress.stat('villagerWork', 1);
       if (Math.random() < 0.35) {
         g.ui.toast('👷 ' + C.JOBS.filter((j) => j.id === v.job)[0].icon + ' اهالی آوردند: ' + got.join(' '), 'good');
+      }
+    } else if (full) {
+      /* Workers used to fail silently against a full store, which looks
+         exactly like workers that do not work. Say so — but rarely. */
+      if (!this._fullWarn || U.now() - this._fullWarn > 20000) {
+        this._fullWarn = U.now();
+        g.ui.toast('📦 انبار پر است — کارگرها جایی برای گذاشتن ندارند. سیلو یا انبار بساز.', 'bad');
       }
     }
   };

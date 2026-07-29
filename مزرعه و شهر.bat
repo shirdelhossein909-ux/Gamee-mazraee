@@ -1,17 +1,17 @@
 @echo off
 chcp 65001 >nul
-title مزرعه و شهر - Farm ^& City
+title مزرعه و شهر
 cd /d "%~dp0"
 
 echo.
-echo   ============================================
-echo     MAZRAE ^& SHAHR  -  FARM ^& CITY
-echo   ============================================
+echo   ==========================================
+echo      MAZRAE ^& SHAHR   -   FARM ^& CITY
+echo   ==========================================
 echo.
 
-rem A tiny local web server is used so the browser lets the game save
-rem your progress. If no Python is installed we just open the file
-rem directly - the game still runs, only the save slot may be blocked.
+rem A tiny local web server is used so the browser lets the game save your
+rem progress. With no Python installed we just open the file directly - the
+rem game still runs, only the save slot may be blocked.
 
 set PORT=8731
 set PY=
@@ -22,7 +22,7 @@ if "%PY%"=="" (where python3 >nul 2>nul && set PY=python3)
 
 if "%PY%"=="" goto NOPYTHON
 
-echo   Starting local server on port %PORT% ...
+echo   Starting on port %PORT% ...
 start "" "http://127.0.0.1:%PORT%/index.html"
 echo   The game is opening in your browser.
 echo   Keep this window open while you play. Close it to stop.

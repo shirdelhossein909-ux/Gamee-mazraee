@@ -11,7 +11,8 @@
   const BUYABLE = [
     'seed_wheat', 'seed_carrot', 'seed_potato', 'seed_corn', 'seed_tomato',
     'seed_pumpkin', 'seed_melon', 'seed_grape',
-    'wood', 'stone', 'clay', 'fiber', 'coal', 'plank', 'brick', 'cloth', 'iron', 'bread'
+    'wood', 'stone', 'clay', 'fiber', 'coal', 'plank', 'brick', 'cloth', 'iron',
+    'bread', 'heart_flask'
   ];
 
   function Economy(game) {

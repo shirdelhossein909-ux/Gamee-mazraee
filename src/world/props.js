@@ -421,31 +421,79 @@
     return assemble(p);
   };
 
-  BM.house = function (l, def) {
+  /* A street of identical houses is the fastest way to make a town look
+     cheap, so every house draws a small palette and a couple of trimmings
+     from its own position — same level, different home. */
+  const ROOFS = [0xa8402f, 0x3d5f8a, 0x3f6f45, 0xc06a2a, 0x6a4a7a, 0x8a6a2a, 0x2f6a6a];
+  const DOORS = [0x5e4224, 0x2f4f6a, 0x6a2f2f, 0x3f5a3a, 0x4a3a5a];
+  const TRIM = [COL.white, COL.plank, COL.thatch, 0xd8cfc0];
+
+  BM.house = function (l, def, mask, variant) {
     const p = [];
+    const v = (variant || 0) | 0;
     const w = 3.4, d = 3.4;
     const floors = Math.min(3, Math.ceil(l / 2));
     const fh = 1.7;
     const wallCol = l >= 4 ? COL.marble : (l >= 2 ? COL.plank : COL.wood);
-    const roofCol = def && def.roof ? def.roof : (l >= 4 ? COL.roofBlue : COL.roofRed);
+    const roofCol = def && def.roof ? def.roof
+      : (l >= 4 ? ROOFS[(v + 1) % ROOFS.length] : ROOFS[v % ROOFS.length]);
+    const doorCol = DOORS[v % DOORS.length];
+    const trimCol = TRIM[(v >> 2) % TRIM.length];
+    const porch = (v & 1) === 1;
+
+    // stone footing, slightly proud of the walls
     p.push({ g: P.box, c: COL.stoneDark, p: [0, 0.12, 0], s: [w + 0.35, 0.24, d + 0.35] });
+    p.push({ g: P.box, c: COL.stone, p: [0, 0.26, 0], s: [w + 0.18, 0.1, d + 0.18] });
+
     for (let f = 0; f < floors; f++) {
       const y = 0.24 + f * fh;
       const fw = w - f * 0.22, fd = d - f * 0.22;
       p.push({ g: P.box, c: f % 2 && l >= 3 ? COL.plank : wallCol, p: [0, y + fh / 2, 0], s: [fw, fh, fd] });
-      // corner beams
+      // corner beams + a painted band between floors
       if (l >= 2) {
         for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
           p.push({ g: P.box, c: COL.woodDark, p: [sx * fw / 2, y + fh / 2, sz * fd / 2], s: [0.18, fh, 0.18] });
         }
+        p.push({ g: P.box, c: trimCol, p: [0, y + 0.06, 0], s: [fw + 0.12, 0.14, fd + 0.12] });
       }
-      windows(p, 0, y + fh * 0.58, 0, fw, fd, f === 0 ? 2 : Math.min(3, 1 + l), true);
+      const wy = y + fh * 0.58;
+      windows(p, 0, wy, 0, fw, fd, f === 0 ? 2 : Math.min(3, 1 + l), true);
+      // shutters and window boxes make the front read as a home
+      if (l >= 2) {
+        const step = fw / ((f === 0 ? 2 : Math.min(3, 1 + l)) + 1);
+        for (let i = 1; i <= (f === 0 ? 2 : Math.min(3, 1 + l)); i++) {
+          const x = -fw / 2 + step * i;
+          for (const sx of [-1, 1]) {
+            p.push({ g: P.box, c: trimCol, p: [x + sx * 0.42, wy, fd / 2 + 0.05], s: [0.2, 0.66, 0.05] });
+          }
+          if (l >= 3) {
+            p.push({ g: P.box, c: COL.woodDark, p: [x, wy - 0.42, fd / 2 + 0.12], s: [0.7, 0.16, 0.24] });
+            p.push({ g: P.ico, c: 0xd8506a, p: [x - 0.16, wy - 0.3, fd / 2 + 0.14], s: [0.18, 0.16, 0.16] });
+            p.push({ g: P.ico, c: 0xf0c040, p: [x + 0.16, wy - 0.3, fd / 2 + 0.14], s: [0.16, 0.15, 0.15] });
+          }
+        }
+      }
     }
     const top = 0.24 + floors * fh;
     gable(p, 0, top, 0, w + 0.5, d + 0.5, 1.0 + l * 0.14, roofCol);
-    door(p, 0, 0.24, d / 2 + 0.02);
+    // eaves: a thin lip under the roof edge, and rafter ends poking out
+    p.push({ g: P.box, c: COL.woodDark, p: [0, top - 0.04, 0], s: [w + 0.62, 0.1, d + 0.62] });
+    for (let i = -2; i <= 2; i++) {
+      p.push({ g: P.box, c: COL.woodDark, p: [i * 0.75, top + 0.02, d / 2 + 0.28], s: [0.1, 0.12, 0.34] });
+    }
+    door(p, 0, 0.24, d / 2 + 0.02, doorCol);
+    // a step, and on some houses a little covered porch
+    p.push({ g: P.box, c: COL.stone, p: [0, 0.3, d / 2 + 0.42], s: [1.2, 0.16, 0.6] });
+    if (porch && l >= 2) {
+      for (const sx of [-1, 1]) {
+        p.push({ g: P.cyl6, c: COL.wood, p: [sx * 0.72, 1.0, d / 2 + 0.72], s: [0.14, 1.5, 0.14] });
+      }
+      p.push({ g: P.box, c: roofCol, p: [0, 1.78, d / 2 + 0.55], r: [-0.24, 0, 0], s: [1.9, 0.12, 1.1] });
+    }
     if (l >= 3) {
+      // chimney with a stone cap
       p.push({ g: P.box, c: COL.brick, p: [w * 0.32, top + 0.9, -d * 0.2], s: [0.45, 1.5, 0.45] });
+      p.push({ g: P.box, c: COL.stoneDark, p: [w * 0.32, top + 1.68, -d * 0.2], s: [0.58, 0.12, 0.58] });
     }
     if (l >= 5) {
       p.push({ g: P.cone5, c: COL.gold, p: [0, top + 1.0 + l * 0.14, 0], s: [0.3, 0.6, 0.3] });
@@ -481,16 +529,43 @@
     const w = 4.4, d = 3.4, h = 2.2 + l * 0.16;
     p.push({ g: P.box, c: COL.stoneDark, p: [0, 0.1, 0], s: [w + 0.3, 0.2, d + 0.3] });
     p.push({ g: P.box, c: l >= 3 ? 0xb8402f : 0xa8402f, p: [0, 0.2 + h / 2, 0], s: [w, h, d] });
+    // the white cross-braces every red barn wears, on the front and both ends
     for (let i = -1; i <= 1; i += 2) {
       p.push({ g: P.box, c: COL.white, p: [i * w * 0.3, 0.2 + h / 2, d / 2 + 0.02], r: [0, 0, 0.5], s: [0.14, h * 0.9, 0.06] });
       p.push({ g: P.box, c: COL.white, p: [i * w * 0.3, 0.2 + h / 2, d / 2 + 0.02], r: [0, 0, -0.5], s: [0.14, h * 0.9, 0.06] });
+      p.push({ g: P.box, c: COL.white, p: [i * (w / 2 + 0.02), 0.2 + h / 2, 0], r: [0.5, 0, 0], s: [0.06, h * 0.9, 0.14] });
     }
-    p.push({ g: P.box, c: COL.woodDark, p: [0, 0.2 + h * 0.42, d / 2 + 0.03], s: [1.5, h * 0.8, 0.08] });
+    p.push({ g: P.box, c: COL.white, p: [0, 0.2 + h - 0.12, d / 2 + 0.03], s: [w * 0.98, 0.14, 0.06] });
+    // split sliding doors on a rail
+    for (const sx of [-1, 1]) {
+      p.push({ g: P.box, c: COL.woodDark, p: [sx * 0.42, 0.2 + h * 0.42, d / 2 + 0.04], s: [0.82, h * 0.8, 0.08] });
+    }
+    p.push({ g: P.box, c: COL.iron, p: [0, 0.2 + h * 0.82, d / 2 + 0.09], s: [2.0, 0.09, 0.07] });
     gable(p, 0, 0.2 + h, 0, w + 0.35, d + 0.35, 1.3, 0x8a3325);
-    p.push({ g: P.box, c: COL.thatch, p: [0, 0.2 + h + 0.6, 0], s: [0.7, 0.7, d * 0.4] });
-    if (l >= 2) for (let i = 0; i < l && i < 4; i++) {
-      p.push({ g: P.box, c: COL.wood, p: [-w / 2 - 0.9, 0.55, -d * 0.3 + i * 0.7], s: [1.6, 0.1, 0.1] });
-      p.push({ g: P.box, c: COL.wood, p: [-w / 2 - 0.9, 0.3, -d * 0.3 + i * 0.7], s: [1.6, 0.1, 0.1] });
+    // hay loft: door, hoist beam and a bale swinging under it
+    p.push({ g: P.box, c: COL.thatch, p: [0, 0.2 + h + 0.6, d / 2 - 0.05], s: [0.8, 0.75, 0.1] });
+    p.push({ g: P.box, c: COL.woodDark, p: [0, 0.2 + h + 1.05, d / 2 + 0.45], s: [0.14, 0.14, 1.0] });
+    if (l >= 2) {
+      p.push({ g: P.cyl6, c: 0xd8cfc0, p: [0, 0.2 + h + 0.72, d / 2 + 0.85], s: [0.05, 0.5, 0.05] });
+      p.push({ g: P.box, c: COL.thatch, p: [0, 0.2 + h + 0.38, d / 2 + 0.85], r: [0, 0.3, 0], s: [0.5, 0.36, 0.5] });
+    }
+    if (l >= 3) {
+      // weather vane on the ridge
+      p.push({ g: P.cyl6, c: COL.iron, p: [-w * 0.3, 0.2 + h + 1.4, 0], s: [0.06, 0.7, 0.06] });
+      p.push({ g: P.cone5, c: COL.gold, p: [-w * 0.3, 0.2 + h + 1.85, 0.22], r: [1.5708, 0, 0], s: [0.18, 0.4, 0.18] });
+      p.push({ g: P.box, c: COL.gold, p: [-w * 0.3, 0.2 + h + 1.85, -0.16], s: [0.05, 0.22, 0.3] });
+    }
+    // paddock rails down the side, longer as the barn grows
+    if (l >= 2) {
+      const posts = Math.min(5, 2 + l);
+      for (let i = 0; i < posts; i++) {
+        const z = -d * 0.4 + i * (d * 0.9 / (posts - 1));
+        p.push({ g: P.cyl6, c: COL.woodDark, p: [-w / 2 - 1.7, 0.45, z], s: [0.13, 0.9, 0.13] });
+      }
+      for (const y of [0.3, 0.62]) {
+        p.push({ g: P.box, c: COL.wood, p: [-w / 2 - 1.7, y, 0], s: [0.1, 0.1, d * 0.95] });
+      }
+      p.push({ g: P.box, c: COL.woodDark, p: [-w * 0.62, 0.28, d * 0.42], s: [0.65, 0.36, 1.3] });   // trough
     }
     return assemble(p);
   };
@@ -498,15 +573,47 @@
   BM.coop = function (l) {
     const p = [];
     const w = 2.2, d = 2.0, h = 1.2 + l * 0.12;
-    p.push({ g: P.box, c: COL.wood, p: [0, 0.15 + h / 2, 0], s: [w, h, d] });
-    gable(p, 0, 0.15 + h, 0, w + 0.3, d + 0.3, 0.8, COL.roofRed);
-    p.push({ g: P.box, c: COL.woodDark, p: [0, 0.5, d / 2 + 0.03], s: [0.55, 0.7, 0.06] });
-    p.push({ g: P.box, c: COL.woodDark, p: [0, 0.12, d / 2 + 0.5], r: [-0.32, 0, 0], s: [0.55, 0.06, 1.1] });
-    for (let i = 0; i < 4; i++) p.push({ g: P.cyl4, c: COL.woodDark, p: [(i % 2 ? 1 : -1) * w * 0.42, 0.08, (i < 2 ? 1 : -1) * d * 0.42], s: [0.13, 0.3, 0.13] });
+    // raised on stilts, as a coop should be
+    for (let i = 0; i < 4; i++) {
+      p.push({ g: P.cyl4, c: COL.woodDark, p: [(i % 2 ? 1 : -1) * w * 0.42, 0.14, (i < 2 ? 1 : -1) * d * 0.42], s: [0.15, 0.4, 0.15] });
+    }
+    p.push({ g: P.box, c: COL.woodDark, p: [0, 0.32, 0], s: [w + 0.1, 0.12, d + 0.1] });
+    p.push({ g: P.box, c: COL.wood, p: [0, 0.38 + h / 2, 0], s: [w, h, d] });
+    // plank lines across the front so it is not one flat slab
+    for (let i = 0; i < 3; i++) {
+      p.push({ g: P.box, c: COL.woodDark, p: [0, 0.5 + i * (h / 3.2), d / 2 + 0.02], s: [w * 0.98, 0.05, 0.04] });
+    }
+    gable(p, 0, 0.38 + h, 0, w + 0.34, d + 0.34, 0.85, COL.roofRed);
+    // pop-hole with a ramp, and a perch bar beside it
+    p.push({ g: P.box, c: 0x1c1410, p: [0.35, 0.66, d / 2 + 0.03], s: [0.46, 0.55, 0.05] });
+    p.push({ g: P.box, c: COL.woodDark, p: [0.35, 0.26, d / 2 + 0.62], r: [-0.5, 0, 0], s: [0.5, 0.06, 1.25] });
+    for (let i = 0; i < 3; i++) {
+      p.push({ g: P.box, c: COL.wood, p: [0.35, 0.3 + i * 0.16, d / 2 + 0.4 + i * 0.2], s: [0.5, 0.05, 0.05] });
+    }
+    p.push({ g: P.cyl6, c: COL.wood, p: [-w * 0.62, 0.9, d / 2 + 0.5], r: [0, 0, 1.5708], s: [0.06, 1.1, 0.06] });
+    // nest boxes bolted to the side, with a lift-up lid
+    p.push({ g: P.box, c: COL.plank, p: [-w / 2 - 0.32, 0.7, 0], s: [0.62, 0.55, d * 0.8] });
+    p.push({ g: P.box, c: COL.roofRed, p: [-w / 2 - 0.36, 1.0, 0], r: [0, 0, -0.28], s: [0.78, 0.08, d * 0.86] });
+    // a hen or two on the perch
+    const hens = Math.min(3, l);
+    for (let i = 0; i < hens; i++) {
+      const x = -0.55 + i * 0.55;
+      p.push({ g: P.ico, c: i % 2 ? COL.white : 0xd8cfc0, p: [x, 1.02, d / 2 + 0.5], s: [0.3, 0.3, 0.36] });
+      p.push({ g: P.sph, c: i % 2 ? COL.white : 0xd8cfc0, p: [x, 1.2, d / 2 + 0.62], s: [0.18, 0.18, 0.18] });
+      p.push({ g: P.cone5, c: 0xd23b32, p: [x, 1.32, d / 2 + 0.62], s: [0.1, 0.12, 0.1] });
+      p.push({ g: P.cone5, c: 0xe8a33a, p: [x, 1.19, d / 2 + 0.74], r: [1.5708, 0, 0], s: [0.07, 0.12, 0.07] });
+    }
     if (l >= 3) {
-      p.push({ g: P.box, c: 0xdad2c0, p: [-w * 0.75, 0.3, 0], s: [0.6, 0.5, 1.4] });
-      p.push({ g: P.sph, c: COL.white, p: [-w * 0.75, 0.62, 0.3], s: [0.35, 0.35, 0.45] });
-      p.push({ g: P.cone5, c: 0xd23b32, p: [-w * 0.75, 0.85, 0.3], s: [0.16, 0.2, 0.16] });
+      // wire run alongside, with a feed bowl
+      for (let i = 0; i < 4; i++) {
+        p.push({ g: P.cyl4, c: COL.woodDark, p: [w * 0.55 + (i % 2) * 1.5, 0.45, -d * 0.4 + (i < 2 ? 0 : d * 0.8)], s: [0.1, 0.9, 0.1] });
+      }
+      p.push({ g: P.box, c: COL.wood, p: [w * 0.55 + 0.75, 0.86, 0], s: [1.7, 0.07, d * 0.85] });
+      p.push({ g: P.cyl6, c: COL.stone, p: [w * 0.55 + 0.75, 0.12, 0], s: [0.45, 0.16, 0.45] });
+      p.push({ g: P.cyl6, c: COL.thatch, p: [w * 0.55 + 0.75, 0.2, 0], s: [0.34, 0.1, 0.34] });
+    }
+    if (l >= 4) {
+      p.push({ g: P.cone5, c: 0xd23b32, p: [0, 0.38 + h + 1.05, 0], s: [0.2, 0.34, 0.2] });
     }
     return assemble(p);
   };
@@ -1111,10 +1218,10 @@
   M.BUILDERS = BM;
 
   /** main entry: build a building model by definition + level */
-  M.building = function (defId, level, mask) {
+  M.building = function (defId, level, mask, variant) {
     const def = C.BUILDINGS[defId];
     const fn = BM[def.model] || BM.shed;
-    const g = fn(level || 1, def, mask);
+    const g = fn(level || 1, def, mask, variant || 0);
     g.userData.defId = defId;
     return g;
   };

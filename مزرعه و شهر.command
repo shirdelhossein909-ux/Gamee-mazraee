@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# ============================================
-#   مزرعه و شهر — Farm & City
-#   Double-click this file to play (macOS / Linux)
-# ============================================
+# ==========================================
+#    مزرعه و شهر  —  Farm & City
+#    Double-click to play (macOS / Linux)
+# ==========================================
 cd "$(dirname "$0")" || exit 1
 
 PORT=8731
 
 echo
-echo "  ============================================"
-echo "    MAZRAE & SHAHR  -  FARM & CITY"
-echo "  ============================================"
+echo "  =========================================="
+echo "     MAZRAE & SHAHR   -   FARM & CITY"
+echo "  =========================================="
 echo
 
 # Serve the folder over http so the browser allows saved games.
@@ -34,13 +34,13 @@ if [ -z "$PY" ]; then
 fi
 
 # Step to a free port if this one is taken
-for try in 0 1 2 3 4 5; do
+for _ in 0 1 2 3 4 5; do
   if ! (exec 3<>/dev/tcp/127.0.0.1/$PORT) 2>/dev/null; then break; fi
   exec 3>&- 2>/dev/null
   PORT=$((PORT + 1))
 done
 
-echo "  Starting local server on port $PORT ..."
+echo "  Starting on port $PORT ..."
 "$PY" -m http.server "$PORT" --bind 127.0.0.1 >/dev/null 2>&1 &
 SERVER=$!
 trap 'kill $SERVER 2>/dev/null' EXIT INT TERM

@@ -116,11 +116,13 @@
   item('jam', 'مربا', '🍯', 60, 'food', 'بازیابی ۴۵ انرژی');
   item('cheese', 'پنیر', '🧀', 55, 'food', 'بازیابی ۴۰ انرژی');
   item('salad', 'سالاد', '🥗', 38, 'food', 'بازیابی ۳۰ انرژی');
+  item('heart_flask', 'شیشهٔ قلب', '❤️', 120, 'food', 'با خوردنش جانت کاملاً پر می‌شود');
 
   C.ITEMS = IT;
 
   /* energy restored by edible items */
   C.FOOD = {
+    heart_flask: { energy: 20, hp: 9999, full: true },   // full: heals to the brim
     bread: { energy: 35, hp: 5 },
     stew: { energy: 60, hp: 25 },
     jam: { energy: 45, hp: 8 },
@@ -416,9 +418,11 @@
   });
 
   bld({
-    id: 'council', name: 'میز شورا', icon: '🪑', cat: 'city', model: 'council', size: [6, 5], max: 3, tier: 0, sk: 1,
+    id: 'council', name: 'میز شورا', icon: '🪑', cat: 'city', model: 'council', size: [6, 5], max: 3, tier: 0, sk: 0,
     desc: 'میز بزرگ قبیله. کنارش بایست و کلید E را بزن تا به هر کس وظیفه بدهی: چوب‌بری، سنگ‌کاری، شکار، کشاورزی یا نگهبانی.',
-    cost: (l) => scale({ wood: 30, plank: 4 }, l),
+    /* deliberately one of the cheapest builds in the game — nothing else
+       matters until you can put people to work */
+    cost: (l) => scale({ wood: 12, fiber: 4 }, l, 1.6),
     effects: (l) => ({ happy: 3, jobSlots: 2 + l * 2 })
   });
 

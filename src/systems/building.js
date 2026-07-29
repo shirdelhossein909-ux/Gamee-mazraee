@@ -76,6 +76,14 @@
     return Math.abs(x - b.x) <= b.w / 2 + pad && Math.abs(z - b.z) <= b.d / 2 + pad;
   }
 
+  /* Same building, same level — but a row of identical houses looks cheap.
+     Each plot gets a stable variant number from its own coordinates, so a
+     house keeps its colours across saves and rebuilds. */
+  function variantAt(x, z) {
+    const h = U.strSeed('v' + Math.round(x * 4) + '_' + Math.round(z * 4));
+    return (h >>> 3) & 1023;
+  }
+
   const _bbox = new THREE.Box3();
   /** how tall this structure actually stands — measured from its geometry */
   function measureHeight(obj) {
@@ -256,7 +264,7 @@
     b.mask = mask;
     this.group.remove(b.obj);
     disposeTree(b.obj);
-    b.obj = M.building(b.defId, b.level, mask);
+    b.obj = M.building(b.defId, b.level, mask, b.variant);
     b.obj.position.set(b.x, b.y, b.z);
     b.obj.rotation.y = 0;                       // shape comes from the mask
     this.group.add(b.obj);
@@ -443,13 +451,14 @@
     const def = C.BUILDINGS[defId];
     const fp = footprint(def, rot);
     const y = this.game.world.footprint(x, z, fp.w, fp.d, 0).avg;
-    const obj = M.building(defId, level);
+    const variant = variantAt(x, z);
+    const obj = M.building(defId, level, undefined, variant);
     obj.position.set(x, y, z);
     obj.rotation.y = rot;
     this.group.add(obj);
 
     const b = {
-      uid: this.uid++, defId: defId, def: def, level: level,
+      uid: this.uid++, defId: defId, def: def, level: level, variant: variant,
       x: x, y: y, z: z, rot: rot, w: fp.w, d: fp.d,
       obj: obj, prodT: 0, stalled: false, towerCd: 0,
       hp: def.hp ? def.hp(level) : 70 * level + 40,
@@ -495,7 +504,7 @@
     b.level++;
     this.group.remove(b.obj);
     disposeTree(b.obj);
-    b.obj = M.building(b.defId, b.level, b.def.connects ? b.mask : undefined);
+    b.obj = M.building(b.defId, b.level, b.def.connects ? b.mask : undefined, b.variant);
     b.obj.position.set(b.x, b.y, b.z);
     b.obj.rotation.y = b.def.connects ? 0 : b.rot;
     this.group.add(b.obj);

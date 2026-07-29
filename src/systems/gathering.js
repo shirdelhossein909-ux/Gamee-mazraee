@@ -307,6 +307,9 @@
       }
       case 'can': {
         if (t && t.kind === 'water' && !t.tooFar) { g.farming.tryRefill(); return; }
+        /* An empty can beside a well or a stream fills itself first. Without
+           this you would stand at the well swinging a dry can at the crops. */
+        if (g.inv.water <= 0 && g.farming.tryRefill()) return;
         const plot = this.plotFor(function (x) { return x.moisture < 0.8; }) || this.plotFor();
         if (plot) {
           const st = C.toolStat('can', prog.toolLevel('can'));
@@ -363,6 +366,8 @@
         return;
       case 'building':
         if (t.building.defId === 'council') return void g.ui.openPanel('jobs');
+        // walking up to a well and pressing E should draw water, not open a panel
+        if (t.building.defId === 'well' && g.farming.tryRefill()) return;
         return void g.ui.openStructure(t.building);
       case 'vehicle':
         return void g.vehicles.mount(t.vehicle);
@@ -620,8 +625,16 @@
     g.player.heal(f.hp);
     g.player.stamina = Math.min(g.player.maxStamina, g.player.stamina + f.energy * 0.6);
     g.player.swing('water');
-    g.audio.eat();
     this.cooldown = 0.5;
+    if (f.full) {
+      g.player.hp = g.player.maxHp;
+      g.player.stamina = g.player.maxStamina;
+      g.audio.levelUp();
+      g.fx.hitBurst(g.player.pos.x, g.player.pos.y + 1.3, g.player.pos.z, 0xff4d6a, 22);
+      g.ui.toast('❤️ ' + C.ITEMS[id].name + ' — جانت کامل پر شد!', 'gold');
+      return;
+    }
+    g.audio.eat();
     g.ui.toast('😋 ' + C.ITEMS[id].name + ' خوردی (+' + U.fa(f.energy) + ' انرژی)', 'good');
   };
 
