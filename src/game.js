@@ -205,6 +205,7 @@
     this.wildlife = new G.Wildlife(this);
     this.villagers = new G.Villagers(this);
     this.vehicles = new G.Vehicles(this);
+    this.horses = new G.Horses(this);
     this.economy = new G.Economy(this);
     this.gather = new G.Gathering(this);
     this.ui = new G.UI(this);
@@ -253,6 +254,7 @@
     if (this.wildlife) this.wildlife.clear();
     if (this.villagers) this.villagers.clear();
     if (this.vehicles) this.vehicles.clear();
+    if (this.horses) this.horses.clear();
     if (this.settlers) this.settlers.clear();
     if (this.audio) this.audio.engineStop();
     if (this.building) {
@@ -282,6 +284,7 @@
   Game.prototype._respawn = function () {
     const p = this.player;
     if (this.vehicles.mounted) this.vehicles.dismount();
+    if (this.horses.mounted) this.horses.dismount();
     p.hp = p.maxHp * 0.5;
     p.energy = Math.max(20, p.energy);
     const loss = Math.floor(this.inv.coins * 0.1);
@@ -336,7 +339,12 @@
       else ui.openPanel('menu');
     }
     if (IN.pressed('KeyF')) { if (IN.locked) IN.unlock(); else IN.lock(); }
-    if (IN.gpressed('KeyV') && !this.building.placing) this.vehicles.toggle();
+    if (IN.gpressed('KeyV') && !this.building.placing) {
+      /* one key for every saddle: horse first, then boat or car */
+      if (this.horses.mounted || this.horses.nearest(this.player.pos.x, this.player.pos.z, 6, true)) {
+        this.horses.toggle();
+      } else this.vehicles.toggle();
+    }
 
     if (!IN.enabled) return;
 
@@ -374,10 +382,20 @@
         this.gather.use(ui.currentTool());
       }
     }
-    /* interact */
+    /* Interact. A wild horse in arm's reach turns E into a hold — you keep it
+       down while the rope goes on. Everything else still fires the instant the
+       key goes down, so no interaction ever feels laggy. */
+    const p = this.player.pos;
+    const wildHorse = !this.building.placing && !this.player.mount &&
+      this.horses.nearestWild(p.x, p.z, C.HORSE.tameRange);
     if (IN.gpressed('KeyE')) {
       if (this.building.placing) this.building.confirm();
+      else if (wildHorse) this._taming = true;
       else this.gather.interact();
+    }
+    if (this._taming) {
+      if (IN.down('KeyE') && wildHorse) this.horses.holdTame(dt);
+      else { this.horses.cancelTame(); this._taming = false; }
     }
   };
 
@@ -402,6 +420,7 @@
     this._input(dt);
 
     this.vehicles.update(dt);
+    this.horses.update(dt);
     this.player.update(dt);
     this.world.update(dt, this.player.pos.x, this.player.pos.z);
     this.sky.update(dt, this.player.pos);

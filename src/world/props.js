@@ -954,6 +954,109 @@
     return assemble(p);
   };
 
+  /* A ring of stones, a stack of logs and a flame. The flame is `isGlow`
+     so it lights up at dusk with the rest of the town's windows, and it is
+     kept in userData so the fire system can hide it when the fuel runs out. */
+  function fireParts(p, scale, l) {
+    const s = scale;
+    for (let i = 0; i < 9; i++) {
+      const a = (i / 9) * 6.283;
+      p.push({
+        g: P.ico, c: i % 2 ? COL.stone : COL.stoneDark,
+        p: [Math.cos(a) * 0.72 * s, 0.11 * s, Math.sin(a) * 0.72 * s],
+        r: [0, a, 0], s: [0.34 * s, 0.26 * s, 0.3 * s]
+      });
+    }
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * 3.14;
+      p.push({
+        g: P.cyl6, c: i % 2 ? COL.woodDark : COL.wood,
+        p: [Math.cos(a) * 0.16 * s, 0.3 * s, Math.sin(a) * 0.16 * s],
+        r: [Math.sin(a) * 0.5, a, Math.cos(a) * 0.5],
+        s: [0.15 * s, 1.0 * s, 0.15 * s]
+      });
+    }
+    p.push({ g: P.cone5, c: 0xff7a1e, glow: true, p: [0, 0.72 * s, 0], s: [0.62 * s, 0.95 * s, 0.62 * s] });
+    p.push({ g: P.cone5, c: 0xffd15c, glow: true, p: [0, 0.6 * s, 0], s: [0.38 * s, 0.7 * s, 0.38 * s] });
+    if (l >= 3) p.push({ g: P.cone5, c: 0xfff0b0, glow: true, p: [0, 0.5 * s, 0], s: [0.2 * s, 0.44 * s, 0.2 * s] });
+  }
+
+  BM.campfire = function (l) {
+    const p = [];
+    fireParts(p, 0.85 + l * 0.07, l);
+    if (l >= 2) {
+      // a spit over the flames
+      for (const sx of [-1, 1]) {
+        p.push({ g: P.cyl6, c: COL.woodDark, p: [sx * 0.85, 0.62, 0], r: [0, 0, sx * 0.28], s: [0.11, 1.4, 0.11] });
+      }
+      p.push({ g: P.cyl6, c: COL.iron, p: [0, 1.3, 0], r: [0, 0, 1.5708], s: [0.06, 2.0, 0.06] });
+    }
+    if (l >= 4) for (let i = 0; i < 3; i++) {
+      p.push({ g: P.box, c: COL.wood, p: [-1.15, 0.16 + i * 0.19, 0.3 - i * 0.1], r: [0, 0.3, 0], s: [0.9, 0.17, 0.17] });
+    }
+    return assemble(p);
+  };
+
+  BM.watchfire = function (l) {
+    const p = [];
+    // stone plinth
+    p.push({ g: P.cyl6, c: COL.stoneDark, p: [0, 0.28, 0], s: [2.4, 0.56, 2.4] });
+    p.push({ g: P.cyl6, c: COL.stone, p: [0, 0.72, 0], s: [1.9, 0.36, 1.9] });
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * 6.283;
+      p.push({ g: P.box, c: COL.stone, p: [Math.cos(a) * 1.05, 1.05, Math.sin(a) * 1.05], r: [0, a, 0], s: [0.5, 0.42, 0.3] });
+    }
+    const fp = [];
+    fireParts(fp, 1.15 + l * 0.09, l);
+    for (const q of fp) { q.p[1] += 1.0; p.push(q); }
+    if (l >= 2) for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+      p.push({ g: P.cyl6, c: COL.woodDark, p: [sx * 1.35, 1.5, sz * 1.35], s: [0.16, 2.6, 0.16] });
+    }
+    if (l >= 3) {
+      p.push({ g: P.box, c: COL.iron, p: [0, 2.85, 0], s: [3.2, 0.14, 3.2] });
+      p.push({ g: P.cone5, c: 0x3a3a42, p: [0, 3.25, 0], s: [2.6, 0.8, 2.6] });
+    }
+    if (l >= 5) p.push({ g: P.box, c: COL.gold, p: [0, 0.72, 1.6], s: [1.4, 0.3, 0.1] });
+    return assemble(p);
+  };
+
+  /** a horse on its own — tamed ones wear a halter and a lead rope */
+  M.horse = function (coat, tamed) {
+    const g = new THREE.Group();
+    const c = coat === undefined ? 0x6b4a2c : coat;
+    const p = [];
+    p.push({ g: P.ico, c: c, p: [0, 1.05, 0], s: [0.85, 0.95, 2.0] });
+    p.push({ g: P.cyl6, c: c, p: [0, 1.5, 0.75], r: [0.55, 0, 0], s: [0.42, 1.1, 0.42] });
+    p.push({ g: P.ico, c: c, p: [0, 1.95, 1.15], s: [0.4, 0.42, 0.8] });
+    p.push({ g: P.box, c: 0x2a2a2a, p: [0, 1.85, 1.5], s: [0.26, 0.2, 0.22] });
+    for (const sx of [-1, 1]) p.push({ g: P.cone5, c: c, p: [sx * 0.16, 2.2, 1.0], s: [0.14, 0.26, 0.14] });
+    for (let i = 0; i < 4; i++) p.push({ g: P.box, c: 0x2a1c12, p: [0, 1.65 + i * 0.13, 0.95 - i * 0.2], s: [0.14, 0.26, 0.2] });
+    p.push({ g: P.cone5, c: 0x2a1c12, p: [0, 1.2, -1.05], r: [-0.6, 0, 0], s: [0.26, 0.9, 0.26] });
+    if (tamed) {
+      // saddle, girth, halter and a coiled lead rope
+      p.push({ g: P.box, c: 0x6a3a1e, p: [0, 1.55, -0.1], s: [0.72, 0.18, 0.85] });
+      p.push({ g: P.box, c: 0x4a2a14, p: [0, 1.28, -0.1], s: [0.9, 0.5, 0.16] });
+      p.push({ g: P.box, c: 0xb08553, p: [0, 1.9, 1.32], s: [0.44, 0.09, 0.5] });
+      p.push({ g: P.box, c: 0xb08553, p: [0, 1.78, 1.12], r: [0, 0, 1.5708], s: [0.09, 0.5, 0.44] });
+      for (let i = 0; i < 3; i++) {
+        p.push({ g: P.cyl6, c: 0xd8c8a0, p: [0.24, 1.72 - i * 0.16, 0.9 - i * 0.14], r: [0.6, 0, 0.3], s: [0.05, 0.5, 0.05] });
+      }
+    }
+    g.add(assemble(p));
+    const legGeo = merge([{ g: P.cyl6, c: c, p: [0, -0.42, 0], s: [0.2, 0.92, 0.2] },
+    { g: P.box, c: 0x2a2a2a, p: [0, -0.86, 0.02], s: [0.24, 0.14, 0.28] }]);
+    const legs = [];
+    for (let i = 0; i < 4; i++) {
+      const m = new THREE.Mesh(legGeo, MAT.solid);
+      m.castShadow = true;
+      m.position.set((i % 2 ? 1 : -1) * 0.34, 1.0, (i < 2 ? 1 : -1) * 0.65);
+      m.userData.phase = (i % 2 ? 0 : Math.PI) + (i < 2 ? 0 : Math.PI);
+      g.add(m); legs.push(m);
+    }
+    g.userData.legs = legs;
+    return g;
+  };
+
   BM.stable = function (l) {
     const p = [];
     const w = 4.6, d = 3.4, h = 2.3 + l * 0.14;

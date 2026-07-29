@@ -144,12 +144,22 @@
       a.state = 'flee';
     } else if (a.raid && a.raidTarget) {
       a.state = 'raid';
-    } else if (a.state === 'chase' || a.state === 'flee') {
+    } else if (a.state === 'chase' || a.state === 'flee' || a.state === 'shy') {
       if (a.timer <= 0) { a.state = 'wander'; a.timer = 1 + Math.random() * 2; }
     }
 
+    /* A burning fire drives predators back out of its circle — they will not
+       press an attack, raid a wall, or even hold their ground inside it. */
+    const fire = (def.hostile || def.thief || a.angry) && this.game.building
+      ? this.game.building.wardedAt(a.x, a.z) : null;
+    if (fire) {
+      a.state = 'shy';
+      a.shyX = fire.x; a.shyZ = fire.z;
+      if (a.raid) { a.raid = false; a.raidTarget = null; }
+    }
+
     /* Night raid — only after dark, and only if the town is worth the trip */
-    if (!a.raid && (def.hostile || def.thief) && night && threat >= C.THREAT.raidMin &&
+    if (!a.raid && !fire && (def.hostile || def.thief) && night && threat >= C.THREAT.raidMin &&
       Math.random() < dt * 0.009 * threat) {
       const t = this.game.building ? this.game.building.raidTarget(a.x, a.z) : null;
       if (t && U.dist(a.x, a.z, t.x, t.z) < 130) { a.raid = true; a.raidTarget = t; a.state = 'raid'; }
@@ -172,6 +182,12 @@
       case 'flee':
         wantX = -pdx; wantZ = -pdz; speed *= 1.12;
         break;
+      case 'shy': {                            // backing out of firelight
+        wantX = a.x - a.shyX; wantZ = a.z - a.shyZ;
+        if (Math.abs(wantX) + Math.abs(wantZ) < 0.01) { wantX = Math.sin(a.yaw); wantZ = Math.cos(a.yaw); }
+        speed *= 1.05;
+        break;
+      }
       case 'raid': {
         const t = a.raidTarget;
         if (!t || t.dead) { a.raid = false; a.state = 'wander'; break; }
@@ -281,9 +297,12 @@
     }
   };
 
-  /** the player is "safe" (not hunted) while standing inside a lit, walled town */
+  /* Firelight is the one thing every predator respects. Stand inside the
+     circle of a burning fire and nothing will come for you — which is what
+     makes a 6-wood campfire the right first build on night one. */
   Wildlife.prototype._playerSafe = function (player) {
-    return false;
+    const b = this.game.building;
+    return !!(b && b.wardedAt(player.pos.x, player.pos.z));
   };
 
   /* ===================== DAMAGE / DEATH ===================== */

@@ -59,7 +59,11 @@
     const pp = g.player.pos;
     const hours = dt * (24 / C.TIME.dayLength);
 
+    /* stabled horses are handed to whoever has the longest walk */
+    if (g.horses) this._mountUp();
+
     for (const v of this.list) {
+      v.mul = v.horse ? 2.3 : 1;                  // a rider covers ground faster
       v.think -= dt;
       if (v.think <= 0) {
         v.think = 2.5 + Math.random() * 3;
@@ -90,7 +94,7 @@
         if (v.swing <= 0) { v.swing = 0.75; v.swingAnim = 1; }
         if (v.workT >= C.JOB_TICK) { v.workT = 0; this._yield(v); }
       } else if (d > 1.1) {
-        const nx = v.x + (dx / d) * v.speed * dt, nz = v.z + (dz / d) * v.speed * dt;
+        const nx = v.x + (dx / d) * v.speed * v.mul * dt, nz = v.z + (dz / d) * v.speed * v.mul * dt;
         const nh = world.heightAt(nx, nz);
         if (nh > C.WORLD.waterLevel + 0.2 && Math.abs(nh - v.y) < 1.8 &&
           !(g.building && g.building.blocks(nx, nz, true))) {
@@ -107,7 +111,7 @@
 
       /* never end up wedged inside a structure */
       if (g.building) {
-        const esc = g.building.escapeFrom(v.x, v.z, 0.2);
+        const esc = g.building.escapeFrom(v.x, v.z, 0.2, true);
         if (esc) { v.x = esc.x; v.z = esc.z; v.y = world.heightAt(v.x, v.z); }
       }
 
@@ -127,6 +131,13 @@
     const o = v.obj, ud = o.userData;
     o.position.set(v.x, v.y, v.z);
     o.rotation.y = v.yaw;
+    if (v.horse) {                              // sitting in the saddle
+      o.position.y += C.HORSE.seat;
+      ud.legL.rotation.x = -1.3; ud.legR.rotation.x = -1.3;
+      ud.armL.rotation.x = -1.05; ud.armR.rotation.x = -1.05;
+      ud.torso.position.y = 0.86;
+      return;
+    }
     const sw = moving ? Math.sin(v.phase) * 0.65 : 0;
     ud.legL.rotation.x = sw; ud.legR.rotation.x = -sw;
     ud.armL.rotation.x = -sw * 0.8;
@@ -138,6 +149,24 @@
       ud.armR.rotation.x = U.damp(ud.armR.rotation.x, sw * 0.8, 10, dt);
     }
     ud.torso.position.y = 0.86 + (moving ? Math.abs(Math.sin(v.phase)) * 0.04 : 0);
+  };
+
+  /* ===================== HORSES ===================== */
+  /* Whoever has a job and a long way to go gets the next free stabled horse;
+     idlers and anyone already at their work site give theirs back. */
+  Villagers.prototype._mountUp = function () {
+    const H = this.game.horses;
+    for (const v of this.list) {
+      const wants = v.job !== 'idle' && v.hasTarget && !v.working &&
+        U.dist2(v.x, v.z, v.tx, v.tz) > 18 * 18;
+      if (wants && !v.horse) {
+        const h = H.lend(v);
+        if (h) v.horse = h;
+      } else if (!wants && v.horse) {
+        H.giveBack(v);
+        v.horse = null;
+      }
+    }
   };
 
   /* ===================== JOB ASSIGNMENT ===================== */
@@ -391,7 +420,7 @@
       obj: null, x: x, z: z, y: this.game.world.heightAt(x, z),
       yaw: Math.random() * 6.283, tx: x, tz: z, think: 0,
       speed: 1.7 + Math.random() * 1.2, phase: Math.random() * 6.283,
-      job: 'idle', working: false, hasTarget: false, workT: 0,
+      job: 'idle', working: false, hasTarget: false, workT: 0, horse: null, mul: 1,
       swingAnim: 0, scale: 0.92 + Math.random() * 0.14,
       baseShirt: U.pick(SHIRTS), basePants: U.pick(PANTS),
       baseHair: U.pick(HAIR), baseHat: Math.random() < 0.4
@@ -402,7 +431,9 @@
 
   Villagers.prototype._remove = function () {
     const v = this.list.pop();
-    if (!v || !v.obj) return;
+    if (!v) return;
+    if (v.horse && this.game.horses) this.game.horses.giveBack(v);
+    if (!v.obj) return;
     this.group.remove(v.obj);
     v.obj.traverse(function (o) { if (o.geometry) o.geometry.dispose(); });
   };

@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>مزرعه و شهر — بازی جهان‌باز سه‌بعدی</title>
+<link rel="icon" type="image/svg+xml" href="icon.svg">
+<link rel="apple-touch-icon" href="icon.svg">
+<meta name="theme-color" content="#1d3326">
 <link rel="stylesheet" href="styles/main.css">
 </head>
 <body>
@@ -92,6 +95,13 @@
       <div id="ti-name">—</div>
       <div id="ti-bar"><i></i></div>
       <div id="ti-hint">—</div>
+    </div>
+
+    <!-- taming a wild horse (hold E) -->
+    <div id="taming" class="hidden">
+      <div class="tm-name">🐎 <span id="tm-title">—</span></div>
+      <div class="tm-track"><i id="tm-fill"></i></div>
+      <div class="tm-hint"><kbd>E</kbd> را نگه دار تا طناب بیندازی</div>
     </div>
 
     <!-- hotbar -->
@@ -343,6 +353,7 @@
 <script src="src/entities/wildlife.js"></script>
 <script src="src/entities/villagers.js"></script>
 <script src="src/entities/vehicles.js"></script>
+<script src="src/entities/horses.js"></script>
 
 <!-- ================= SYSTEMS ================= -->
 <script src="src/systems/audio.js"></script>

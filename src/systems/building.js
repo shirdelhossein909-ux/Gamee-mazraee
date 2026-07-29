@@ -46,10 +46,15 @@
     };
   }
 
+  /* Index a structure into every cell its *padded* box touches. Without the
+     margin a wall whose edge sits just inside cell 0 is invisible to a query
+     one centimetre into cell 1 — which is exactly the seam an animal walks
+     through, and the seam that leaves you half-buried in a fence. */
+  const HASH_PAD = 1.2;
   Building.prototype._cells = function (b) {
     const out = [];
-    const x0 = Math.floor((b.x - b.w / 2) / CELL), x1 = Math.floor((b.x + b.w / 2) / CELL);
-    const z0 = Math.floor((b.z - b.d / 2) / CELL), z1 = Math.floor((b.z + b.d / 2) / CELL);
+    const x0 = Math.floor((b.x - b.w / 2 - HASH_PAD) / CELL), x1 = Math.floor((b.x + b.w / 2 + HASH_PAD) / CELL);
+    const z0 = Math.floor((b.z - b.d / 2 - HASH_PAD) / CELL), z1 = Math.floor((b.z + b.d / 2 + HASH_PAD) / CELL);
     for (let cx = x0; cx <= x1; cx++) for (let cz = z0; cz <= z1; cz++) out.push(U.key(cx, cz));
     return out;
   };
@@ -79,16 +84,22 @@
     return isFinite(h) && h > 0 ? h : 3;
   }
 
+  const BLOCK_PAD = 0.35;               // how wide a body the collision test assumes
+
+  function ghostly(b, forPlayer) {
+    if (b.def.id === 'lamp') return true;
+    if (!forPlayer) return false;
+    const eff = b.def.effects ? b.def.effects(b.level) : {};
+    return !!eff.passable;
+  }
+
   /** does something solid stand here? gates let the player through */
   Building.prototype.blocks = function (x, z, forPlayer) {
     const arr = this._at(x, z);
     if (!arr) return false;
     for (const b of arr) {
-      if (b.def.id === 'lamp') continue;
-      if (!inside(b, x, z, 0.35)) continue;
-      const eff = b.def.effects ? b.def.effects(b.level) : {};
-      if (forPlayer && eff.passable) continue;
-      return true;
+      if (ghostly(b, forPlayer)) continue;
+      if (inside(b, x, z, BLOCK_PAD)) return true;
     }
     return false;
   };
@@ -130,18 +141,63 @@
   /* If a point ends up inside a solid footprint — an animal that clipped a
      doorway, or the player when a wall goes up around them — return the
      nearest point just outside it, pushed along the shallowest axis. */
-  Building.prototype.escapeFrom = function (x, z, pad) {
+  /** the structure this point is furthest inside, or null when it is clear */
+  Building.prototype._deepestAt = function (x, z, pad, forPlayer) {
     const arr = this._at(x, z);
     if (!arr) return null;
-    pad = pad || 0;
+    let worst = null, wd = 0;
     for (const b of arr) {
-      if (b.def.id === 'lamp') continue;
-      const hw = b.w / 2 + pad, hd = b.d / 2 + pad;
-      const dx = x - b.x, dz = z - b.z;
-      if (Math.abs(dx) >= hw || Math.abs(dz) >= hd) continue;
-      const px = hw - Math.abs(dx), pz = hd - Math.abs(dz);
-      if (px <= pz) return { x: b.x + (dx < 0 ? -1 : 1) * hw * 1.03, z: z };
-      return { x: x, z: b.z + (dz < 0 ? -1 : 1) * hd * 1.03 };
+      if (ghostly(b, forPlayer)) continue;
+      const px = (b.w / 2 + pad) - Math.abs(x - b.x);
+      const pz = (b.d / 2 + pad) - Math.abs(z - b.z);
+      if (px <= 0 || pz <= 0) continue;
+      const depth = Math.min(px, pz);
+      if (depth > wd) { wd = depth; worst = b; }
+    }
+    return worst;
+  };
+
+  /* Shove a body out of whatever it is standing inside.
+
+     Two things make this harder than one push: a run of connecting walls is
+     many separate structures, so escaping one can drop you straight into the
+     next; and the exit must clear the *collision* pad, or blocks() still calls
+     the new spot solid and the body stays welded to the wall forever — which
+     is exactly how you end up frozen in a fence while wolves knock you about.
+     So: resolve the deepest overlap first, always along an axis that actually
+     comes out free, and repeat a few times for corners. */
+  Building.prototype.escapeFrom = function (x, z, pad, forPlayer) {
+    const out = Math.max(pad === undefined ? 0.2 : pad, BLOCK_PAD) + 0.06;
+    let cx = x, cz = z, moved = false;
+    for (let iter = 0; iter < 5; iter++) {
+      const b = this._deepestAt(cx, cz, out, forPlayer);
+      if (!b) break;
+      const hw = b.w / 2 + out, hd = b.d / 2 + out;
+      const dx = cx - b.x, dz = cz - b.z;
+      const ax = b.x + (dx < 0 ? -hw : hw), az = b.z + (dz < 0 ? -hd : hd);
+      const freeX = !this._deepestAt(ax, cz, out, forPlayer);
+      const freeZ = !this._deepestAt(cx, az, out, forPlayer);
+      const shallowX = (hw - Math.abs(dx)) <= (hd - Math.abs(dz));
+      let useX;
+      if (freeX === freeZ) useX = shallowX; else useX = freeX;
+      if (useX) cx = ax; else cz = az;
+      moved = true;
+    }
+    return moved ? { x: cx, z: cz } : null;
+  };
+
+  /* Last resort when even the push-out is boxed in on every side: walk a
+     spiral outward and hand back the first standable spot. */
+  Building.prototype.freeSpotNear = function (x, z, forPlayer) {
+    const world = this.game.world;
+    for (let r = 1.6; r <= 22; r += 1.4) {
+      for (let a = 0; a < 14; a++) {
+        const ang = (a / 14) * 6.283 + r;
+        const px = x + Math.cos(ang) * r, pz = z + Math.sin(ang) * r;
+        if (this.blocks(px, pz, forPlayer)) continue;
+        if (world.heightAt(px, pz) < C.WORLD.waterLevel + 0.2) continue;
+        return { x: px, z: pz };
+      }
     }
     return null;
   };
@@ -400,10 +456,19 @@
       maxHp: def.hp ? def.hp(level) : 70 * level + 40,
       glow: []
     };
+    /* A flame burns just as brightly at noon, so it opts out of the shared
+       window material that fades with the dusk. */
+    const fire = this.isFire(b);
     obj.traverse(function (o) {
-      if (o.userData && o.userData.isGlow) { o.material = M.MAT.window; b.glow.push(o); }
+      if (o.userData && o.userData.isGlow) { o.material = fire ? M.MAT.glow : M.MAT.window; b.glow.push(o); }
     });
     b.h = measureHeight(obj);
+    if (fire) {
+      b.fuel = this.fireRate(b) * 3;      // arrives with a few logs already burning
+      b.lit = true;
+      b.autoFeed = true;
+      this._paintFire(b);
+    }
     this.list.push(b);
     this._index(b, true);
     this.invalidate();
@@ -435,8 +500,12 @@
     b.obj.rotation.y = b.def.connects ? 0 : b.rot;
     this.group.add(b.obj);
     b.glow = [];
-    b.obj.traverse(function (o) { if (o.userData && o.userData.isGlow) b.glow.push(o); });
+    const fireUp = this.isFire(b);
+    b.obj.traverse(function (o) {
+      if (o.userData && o.userData.isGlow) { o.material = fireUp ? M.MAT.glow : M.MAT.window; b.glow.push(o); }
+    });
     b.h = measureHeight(b.obj);
+    if (fireUp) this._paintFire(b);
     b.maxHp = b.def.hp ? b.def.hp(b.level) : 70 * b.level + 40;
     b.hp = b.maxHp;
     this.invalidate();
@@ -492,12 +561,90 @@
   };
 
   /* =========================================================
+     FIRE — the early-game answer to the dark
+     ========================================================= */
+  Building.prototype.isFire = function (b) {
+    return b.def.effects && b.def.effects(b.level).ward > 0;
+  };
+
+  /** hours of burn one log buys this fire */
+  Building.prototype.fireRate = function (b) {
+    return C.FIRE.fuelPerLog / Math.pow(C.FIRE.burnPerLevel, b.level - 1);
+  };
+
+  /** feed the fire — returns how many logs actually went in */
+  Building.prototype.feedFire = function (b, logs) {
+    if (!this.isFire(b)) return 0;
+    const room = C.FIRE.maxLogs - Math.floor(b.fuel / this.fireRate(b));
+    let n = Math.min(logs, Math.max(0, room));
+    n = Math.min(n, this.game.inv.count('wood'));
+    if (n <= 0) return 0;
+    this.game.inv.remove('wood', n);
+    b.fuel += n * this.fireRate(b);
+    if (!b.lit) { b.lit = true; this.game.audio.build(); }
+    this._paintFire(b);
+    return n;
+  };
+
+  Building.prototype._paintFire = function (b) {
+    const on = !!b.lit;
+    for (const o of b.glow) o.visible = on;
+    if (b.obj) b.obj.userData.fireLit = on;
+  };
+
+  /** is (x,z) inside the safe circle of a burning fire? */
+  Building.prototype.wardedAt = function (x, z) {
+    for (const b of this.list) {
+      if (!b.lit) continue;
+      const r = b.def.effects(b.level).ward;
+      if (!r) continue;
+      if (U.dist2(x, z, b.x, b.z) < r * r) return b;
+    }
+    return null;
+  };
+
+  /** strongest ward reaching this point, 0 when none — used for spawn bias */
+  Building.prototype.wardRadius = function () {
+    let r = 0;
+    for (const b of this.list) {
+      if (!b.lit) continue;
+      const w = b.def.effects(b.level).ward || 0;
+      if (w > r) r = w;
+    }
+    return r;
+  };
+
+  Building.prototype._stepFires = function (hours) {
+    const g = this.game;
+    for (const b of this.list) {
+      if (!this.isFire(b)) continue;
+      if (!b.lit) continue;
+      b.fuel -= hours;
+      if (b.fuel <= 0) {
+        b.fuel = 0;
+        // an unattended fire tries to feed itself from your woodpile
+        if (b.autoFeed && this.feedFire(b, C.FIRE.autoFeed) > 0) continue;
+        b.lit = false;
+        this._paintFire(b);
+        g.ui.toast('🌑 ' + b.def.name + ' خاموش شد — هیزم بریز', 'bad');
+        g.audio.deny();
+      } else if (b.fuel < C.FIRE.lowWarn && !b.warned) {
+        b.warned = true;
+        g.ui.toast('🔥 ' + b.def.name + ' دارد تمام می‌شود', 'bad');
+      }
+      if (b.fuel > C.FIRE.lowWarn) b.warned = false;
+    }
+  };
+
+  /* =========================================================
      RAIDS
      ========================================================= */
   Building.prototype.raidTarget = function (x, z) {
     if (!this.list.length) return null;
     let best = null, bd = 1e9;
     for (const b of this.list) {
+      /* raiders will not walk into firelight to chew on a wall */
+      if (this.wardedAt(b.x, b.z)) continue;
       const d = U.dist2(x, z, b.x, b.z);
       const pref = b.def.cat === 'farm' || b.def.cat === 'home' ? 0.55 : 1;
       if (d * pref < bd) { bd = d * pref; best = b; }
@@ -544,8 +691,18 @@
         if (b.obj.userData.spinAxis === 'z') spin.rotation.z += dt * sp * 3;
         else spin.rotation.x += dt * sp;
       }
-      /* lit windows — opacity is driven by the shared material above */
-      if (b.glow.length) for (const gm of b.glow) gm.visible = night;
+      /* lit windows — opacity is driven by the shared material above.
+         Fires answer to their fuel instead, day or night. */
+      if (b.glow.length) {
+        if (b.fire === undefined) b.fire = this.isFire(b);
+        if (b.fire) {
+          const flick = 0.9 + Math.sin(U.now() * 0.011 + b.uid) * 0.08 +
+            Math.sin(U.now() * 0.027 + b.uid * 2) * 0.05;
+          for (const gm of b.glow) { gm.visible = !!b.lit; gm.scale.y = b.lit ? flick : 1; }
+        } else {
+          for (const gm of b.glow) gm.visible = night;
+        }
+      }
 
       /* production */
       if (b.def.produce) {
@@ -589,6 +746,7 @@
       }
     }
 
+    this._stepFires(hours);
     this._updateLights(night, nightF);
     this._updateTracers(dt);
 
@@ -599,26 +757,29 @@
   Building.prototype._updateLights = function (night, nightF) {
     const p = this.game.player.pos;
     if (nightF === undefined) nightF = 1;
-    if (!night) {
-      for (const l of this._lights) l.visible = false;
-      return;
-    }
     const cand = [];
     for (const b of this.list) {
-      if (!b.glow.length && b.defId !== 'lamp' && b.defId !== 'smelter') continue;
+      const burning = b.fire && b.lit;
+      /* a fire throws light whatever the hour; everything else waits for dusk */
+      if (!burning && !night) continue;
+      if (!burning && !b.glow.length && b.defId !== 'lamp' && b.defId !== 'smelter') continue;
       const d = U.dist2(p.x, p.z, b.x, b.z);
-      if (d < 60 * 60) cand.push({ b: b, d: d });
+      if (d < 60 * 60) cand.push({ b: b, d: burning ? d * 0.25 : d });
     }
+    if (!cand.length) { for (const l of this._lights) l.visible = false; return; }
     cand.sort((a, c) => a.d - c.d);
     for (let i = 0; i < this._lights.length; i++) {
       const l = this._lights[i];
       if (i < cand.length) {
         const b = cand[i].b;
         const isLamp = b.defId === 'lamp';
-        l.position.set(b.x, b.y + (isLamp ? 2.8 + b.level * 0.3 : 2.2), b.z);
-        l.intensity = (isLamp ? 1.5 + b.level * 0.35 : 0.9) * nightF;
-        l.distance = isLamp ? 16 + b.level * 4 : 12;
-        l.color.setHex(b.defId === 'smelter' ? 0xff7a2a : 0xffc069);
+        const burning = b.fire && b.lit;
+        l.position.set(b.x, b.y + (isLamp ? 2.8 + b.level * 0.3 : burning ? 1.3 : 2.2), b.z);
+        l.intensity = burning
+          ? (1.6 + b.level * 0.5) * (0.35 + nightF * 0.9)
+          : (isLamp ? 1.5 + b.level * 0.35 : 0.9) * nightF;
+        l.distance = burning ? (b.def.effects(b.level).ward || 12) * 0.75 : isLamp ? 16 + b.level * 4 : 12;
+        l.color.setHex(burning ? 0xff9a3a : b.defId === 'smelter' ? 0xff7a2a : 0xffc069);
         l.visible = true;
       } else l.visible = false;
     }

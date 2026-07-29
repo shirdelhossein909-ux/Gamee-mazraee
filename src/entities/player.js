@@ -175,10 +175,28 @@
 
     this.pos.y += this.vel.y * dt;
 
-    // if a structure went up around us, step outside instead of sticking
+    /* If something went up around us — or a bear's shove buried us in the
+       fence — step outside instead of sticking. When even that cannot free
+       us (boxed in on all four sides) fall back to the nearest open ground,
+       so no amount of knockback can ever weld the player to a wall. */
     if (this.game.building) {
-      const esc = this.game.building.escapeFrom(this.pos.x, this.pos.z, 0.2);
-      if (esc) { this.pos.x = esc.x; this.pos.z = esc.z; }
+      const bld = this.game.building;
+      const esc = bld.escapeFrom(this.pos.x, this.pos.z, 0.2, true);
+      if (esc) {
+        this.pos.x = esc.x; this.pos.z = esc.z;
+        this.vel.x *= 0.15; this.vel.z *= 0.15;      // kill the shove that put us here
+      }
+      if (bld.blocks(this.pos.x, this.pos.z, true)) {
+        this._wedged = (this._wedged || 0) + dt;
+        if (this._wedged > 0.5) {
+          const spot = bld.freeSpotNear(this.pos.x, this.pos.z, true);
+          if (spot) {
+            this.pos.x = spot.x; this.pos.z = spot.z;
+            this.vel.set(0, 0, 0);
+            this._wedged = 0;
+          }
+        }
+      } else this._wedged = 0;
     }
     const ground = world.heightAt(this.pos.x, this.pos.z);
     this.inWater = ground < W.waterLevel - 0.25;

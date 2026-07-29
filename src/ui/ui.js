@@ -240,6 +240,7 @@
 
     this._quest();
     this._target();
+    this._taming();
     this._floaters(dt);
 
     this._mmT -= dt;
@@ -264,6 +265,17 @@
       U.fa(used) + '/' + U.fa(cap) + '</b></div>';
     this.el.res.innerHTML = html;
     this.dirtyRes = false;
+  };
+
+  /** progress ring while a rope is going over a wild horse's neck */
+  UI.prototype._taming = function () {
+    const box = $('taming');
+    if (!box) return;
+    const t = this.game.horses && this.game.horses.taming;
+    if (!t) { if (!box.classList.contains('hidden')) box.classList.add('hidden'); return; }
+    box.classList.remove('hidden');
+    $('tm-title').textContent = 'رام کردن «' + t.horse.name + '»';
+    $('tm-fill').style.width = U.clamp01(t.t / C.HORSE.tameTime) * 100 + '%';
   };
 
   UI.prototype._quest = function () {
@@ -931,10 +943,61 @@
   };
 
   /* ---------------- build ---------------- */
+  /* The crew tab is not a building tab: these cards hire a person instead of
+     placing a structure. They still need somewhere to sleep, and you still
+     hand out their duty at the council table. */
+  UI.prototype.renderCrew = function () {
+    const g = this.game, self = this;
+    const grid = $('build-grid');
+    const S = g.settlers;
+    const spare = S.spareHomes();
+    const cell = (v, l, warn) =>
+      '<div class="pop-cell' + (warn ? ' warn' : '') + '"><b>' + v + '</b><span>' + l + '</span></div>';
+    const note = document.createElement('div');
+    note.className = 'crew-note';
+    note.innerHTML =
+      '<div class="crew-stats">' +
+      cell(U.fa(S.population()), 'اهالی') +
+      cell(U.fa(spare), 'خانهٔ خالی', spare <= 0) +
+      cell(U.fa(S.freeWorkers()), 'جای کار خالی', S.freeWorkers() <= 0) +
+      '</div>' +
+      '<small>هر کسی که می‌خری باید خانهٔ خالی داشته باشد. بعد از خرید، کنار «میز شورا» برو ' +
+      'و با کلید J وظیفه‌اش را تعیین کن.</small>';
+    grid.appendChild(note);
+
+    for (const id in C.CREW) {
+      const def = C.CREW[id];
+      const cost = def.cost(S.residents);
+      const afford = g.inv.canAfford(cost);
+      const d = document.createElement('div');
+      d.className = 'card' + (spare > 0 ? '' : ' locked');
+      let costHtml = '';
+      for (const k in cost) {
+        const have = k === 'coin' ? g.inv.coins : g.inv.count(k);
+        const icon = k === 'coin' ? '💰' : (C.ITEMS[k] ? C.ITEMS[k].icon : k);
+        costHtml += '<span class="' + (have >= cost[k] ? '' : 'no') + '">' + icon + ' ' + U.fa(cost[k]) + '</span>';
+      }
+      const job = C.JOBS.filter((j) => j.id === def.job)[0];
+      d.innerHTML = '<div class="ci">' + def.icon + '</div><div class="cn">' + def.name +
+        '</div><div class="cd">' + def.desc + '</div>' +
+        '<div class="cd" style="color:var(--gold)">کار پیشنهادی: ' + job.icon + ' ' + job.name + '</div>' +
+        '<div class="cc">' + costHtml + '</div>' +
+        (spare > 0 ? '' : '<div class="lock">🔒 خانهٔ خالی نداری — اول خانه بساز</div>');
+      if (spare > 0) {
+        d.onclick = function () {
+          if (!afford) { self.toast('⚠️ منابع کافی نداری', 'bad'); g.audio.deny(); return; }
+          if (S.hireCrew(id)) self.renderBuild();
+        };
+      }
+      grid.appendChild(d);
+    }
+  };
+
   UI.prototype.renderBuild = function () {
     const g = this.game, self = this;
     const grid = $('build-grid');
     grid.innerHTML = '';
+    if (this.buildCat === 'crew') return this.renderCrew();
     for (const id in C.BUILDINGS) {
       const def = C.BUILDINGS[id];
       if (def.cat !== this.buildCat) continue;

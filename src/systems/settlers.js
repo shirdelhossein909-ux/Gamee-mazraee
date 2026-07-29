@@ -135,6 +135,36 @@
     return true;
   };
 
+  /* Hire a specific tradesperson from the build menu. They arrive already
+     pointed at their trade, so if there is a free job slot the duty is set
+     for you — otherwise they idle until you sort it out at the council. */
+  Settlers.prototype.hireCrew = function (id) {
+    const g = this.game, def = C.CREW[id];
+    if (!def) return false;
+    if (this.spareHomes() < 1) {
+      g.ui.toast('🏠 خانهٔ خالی نداری — اول خانه بساز', 'bad'); g.audio.deny(); return false;
+    }
+    const cost = def.cost(this.residents);
+    if (!g.inv.canAfford(cost)) { g.ui.toast('⚠️ منابع کافی نداری', 'bad'); g.audio.deny(); return false; }
+    g.inv.pay(cost);
+    this.addResidents(1);
+    g.progress.stat('hire', 1);
+    g.audio.coin();
+    let msg = def.icon + ' ' + def.name + ' به قبیله پیوست';
+    if (this.freeWorkers() > 0) {
+      this.jobs[def.job] = (this.jobs[def.job] || 0) + 1;
+      if (g.villagers) g.villagers.timer = 0;
+      const job = C.JOBS.filter((j) => j.id === def.job)[0];
+      msg += ' و سر کار ' + job.name + ' رفت';
+    } else if (this.jobSlots() <= 0) {
+      msg += ' — برای تعیین وظیفه یک «میز شورا» بساز';
+    } else {
+      msg += ' — جای کار خالی نداری، میز شورا را ارتقا بده';
+    }
+    g.ui.toast(msg, 'gold');
+    return true;
+  };
+
   /* ===================== RECRUITERS ===================== */
   Settlers.prototype.maxRiders = function () {
     return this.game.building ? this.game.building.maxLevelOf('stable') : 0;

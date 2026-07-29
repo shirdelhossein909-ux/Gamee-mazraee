@@ -422,13 +422,87 @@
     effects: (l) => ({ happy: 3, jobSlots: 2 + l * 2 })
   });
 
+  bld({
+    id: 'campfire', name: 'آتش اردو', icon: '🔥', cat: 'def', model: 'campfire', size: [2, 2], max: 4, tier: 0, sk: 0,
+    desc: 'حیوانات از شعله می‌ترسند. تا وقتی هیزم دارد، دور تا دورش امن است. با ارتقا شعاعش بیشتر و سوختش کم‌مصرف‌تر می‌شود.',
+    cost: (l) => scale({ wood: 6, stone: 4 }, l, 1.7),
+    effects: (l) => ({ ward: 11 + l * 4, happy: 1 }), hp: (l) => 30 * l
+  });
+  bld({
+    id: 'watchfire', name: 'آتش دیده‌بانی', icon: '🕯️', cat: 'def', model: 'watchfire', size: [3, 3], max: 5, tier: 1, sk: 2,
+    desc: 'آتش بزرگ روی پایهٔ سنگی. شعاع امنش خیلی بیشتر است و کندتر هیزم می‌سوزاند.',
+    cost: (l) => Object.assign(scale({ stone: 30, wood: 20, iron: 2 }, l), { coin: Math.round(90 * Math.pow(1.8, l - 1)) }),
+    effects: (l) => ({ ward: 24 + l * 7, happy: 2 }), hp: (l) => 80 * l
+  });
+
   C.BUILD_CATS = [
     { id: 'farm', name: '🌾 مزرعه' },
     { id: 'home', name: '🏠 مسکونی' },
     { id: 'prod', name: '🏭 تولیدی' },
     { id: 'city', name: '🏛️ شهری' },
-    { id: 'def', name: '🛡️ دفاعی' }
+    { id: 'def', name: '🛡️ دفاعی' },
+    { id: 'crew', name: '👷 کارگرها' }
   ];
+
+  /* ===================== FIRE (the early-game answer to night raids) =====
+     A lit fire keeps predators out of a circle around it. It eats wood, so
+     it is a real decision: burn your building material to sleep safely, or
+     risk the dark. Higher levels burn slower and reach further. */
+  C.FIRE = {
+    fuelPerLog: 3.2,              // in-game hours of light per wood
+    maxLogs: 12,                  // how much wood a fire can hold at once
+    burnPerLevel: 0.86,           // each level multiplies fuel use by this
+    autoFeed: 2,                  // logs an auto-feeding fire pulls per top-up
+    lowWarn: 2.5                  // warn when fewer than this many hours are left
+  };
+
+  /* ===================== HIREABLE CREW =====================
+     Bought from the build menu, then given a duty at the council table.
+     A plain labourer is cheap; specialists cost a lot more but arrive
+     already skilled at their trade. */
+  const crew = (o) => { C.CREW[o.id] = o; };
+  C.CREW = Object.create(null);
+  crew({
+    id: 'hand', name: 'کارگر ساده', icon: '🧑‍🌾', job: 'stone',
+    desc: 'ارزان‌ترین نیرو. برای جمع کردن سنگ و چوب و کارهای ساده عالی است. سر میز شورا هر وظیفه‌ای بخواهی به او می‌دهی.',
+    cost: (n) => ({ coin: Math.round(90 * Math.pow(1.09, n)), bread: 1 })
+  });
+  crew({
+    id: 'logger', name: 'چوب‌بُر کارکشته', icon: '🪓', job: 'wood',
+    desc: 'با تبرش سریع‌تر از بقیه چوب می‌آورد و الیاف بیشتری پیدا می‌کند.',
+    cost: (n) => ({ coin: Math.round(320 * Math.pow(1.12, n)), plank: 4 })
+  });
+  crew({
+    id: 'miner', name: 'معدن‌چی', icon: '⛏️', job: 'stone',
+    desc: 'رگه‌های زغال و آهن را می‌شناسد و بازدهش از کارگر ساده بیشتر است.',
+    cost: (n) => ({ coin: Math.round(480 * Math.pow(1.12, n)), iron: 3 })
+  });
+  crew({
+    id: 'ranger', name: 'شکارچی حرفه‌ای', icon: '🏹', job: 'hunt',
+    desc: 'کمان‌دار زبردست. حیوانات را از فاصلهٔ دور می‌زند و گوشت و پوست می‌آورد.',
+    cost: (n) => ({ coin: Math.round(900 * Math.pow(1.14, n)), iron: 6, cloth: 2 })
+  });
+  crew({
+    id: 'warden', name: 'نگهبان جنگی', icon: '🛡️', job: 'guard',
+    desc: 'گران اما ارزشش را دارد: شب‌ها جلوی گله‌های مهاجم می‌ایستد.',
+    cost: (n) => ({ coin: Math.round(1400 * Math.pow(1.15, n)), iron: 10, plank: 8 })
+  });
+
+  /* ===================== HORSES ===================== */
+  C.HORSE = {
+    tameTime: 2.6,                // seconds of holding E
+    tameRange: 5.0,
+    spookRange: 3.2,              // a wild horse backs off if you crowd it
+    coats: [0x6b4a2c, 0x3a2a1e, 0xd8c8a8, 0x8a8a8a, 0x1e1e1e, 0x8a5a3a],
+    names: ['باد', 'شهاب', 'رخش', 'صبا', 'طوفان', 'برق', 'آذر', 'سیمرغ', 'کهربا', 'دلدل'],
+    wildCap: 4,                   // wild horses roaming near you at once
+    seat: 0.98,                   // hips land on the saddle, not above it
+    seatBack: 0.18,               // and a little behind the withers
+    speed: 13.5, accel: 5.2, turn: 3.2,
+    stableRange: 9,               // stand this close to the stable to house it
+    ropeCost: { fiber: 4 },       // thrown when you tame — cheap but not free
+    followRange: 14
+  };
 
   /* ===================== ANIMALS ===================== */
   C.ANIMALS = {

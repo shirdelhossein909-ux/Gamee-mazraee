@@ -102,6 +102,15 @@
       }
     }
 
+    /* horses */
+    if (g.horses) {
+      for (const h of g.horses.list) {
+        if (h.mounted) continue;
+        const t = sphereHit(ray.origin, ray.dir, h.x, h.y + 1.3, h.z, 1.5, maxT + 2);
+        if (t >= 0 && t < bt) { bt = t; best = { kind: 'horse', horse: h, dist: t, x: h.x, z: h.z }; }
+      }
+    }
+
     /* ground / plots / water */
     const gr = g.world.rayGround(ray.origin, ray.dir, camOff + 60);
     if (gr && gr.dist < bt + 0.6) {
@@ -126,6 +135,7 @@
         if (best.kind === 'node') allow += best.node.kind === 'tree' ? 1.6 : 1.0;
         if (best.kind === 'building') allow += Math.max(best.building.w, best.building.d) * 0.5;
         if (best.kind === 'vehicle') allow += 1.2;
+        if (best.kind === 'horse') allow = Math.max(allow, C.HORSE.tameRange);
         best.tooFar = best.playerDist > allow;
       }
     }
@@ -230,6 +240,19 @@
       case 'vehicle': {
         const v = t.vehicle;
         return { name: v.def.icon + ' ' + v.def.name + ' — سطح ' + U.fa(v.level), hint: 'کلید E یا V: سوار شدن' };
+      }
+      case 'horse': {
+        const h = t.horse;
+        if (!h.tame) {
+          return {
+            name: '🐎 اسب وحشی',
+            hint: 'کلید E را نگه دار تا با طناب رامش کنی (' + U.fa(C.HORSE.ropeCost.fiber) + ' الیاف)'
+          };
+        }
+        return {
+          name: '🐎 ' + h.name + (h.stabled ? ' — در اصطبل' : ''),
+          hint: h.rider ? 'یکی از اهالی سوارش است' : 'کلید E یا V: سوار شدن · ببرش کنار اصطبل تا آنجا بماند'
+        };
       }
       case 'water':
         return { name: '💧 آب', hint: 'چوب ماهیگیری: ماهیگیری · آبپاش: پر کردن · شنا: مستقیم برو داخل' };
@@ -343,6 +366,8 @@
         return void g.ui.openStructure(t.building);
       case 'vehicle':
         return void g.vehicles.mount(t.vehicle);
+      case 'horse':
+        return void g.horses.mount(t.horse);
       case 'water':
         if (!g.farming.tryRefill()) this.castLine();
         return;

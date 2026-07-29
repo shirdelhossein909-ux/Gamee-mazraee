@@ -344,6 +344,21 @@
       }
     }
 
+    /* a fire you are standing beside pops and crackles */
+    this._fireT = (this._fireT || 0) - dt;
+    if (this._fireT <= 0) {
+      this._fireT = 0.35 + Math.random() * 0.5;
+      const b = g.building;
+      if (b && b.list.length) {
+        let near = false;
+        for (const s of b.list) {
+          if (!s.lit) continue;
+          if (U.dist2(p.pos.x, p.pos.z, s.x, s.z) < 100) { near = true; break; }
+        }
+        if (near) this.crackle();
+      }
+    }
+
     /* thunder follows the lightning flash */
     if (stormy && sky._flash > 0.16 && !this._thunderT) {
       this._thunderT = 0.5 + Math.random() * 1.6;
@@ -527,6 +542,22 @@
   A.horse = function () {
     for (let i = 0; i < 6; i++) {
       this.burst({ freq: 260, to: 110, q: 1.6, dur: 0.1, gain: 0.13, filter: 'bandpass', delay: i * 0.135 + (i % 2) * 0.045 });
+    }
+  };
+  /** one hoof-fall while riding — a soft thud with a little grit on top */
+  A.hoof = function () {
+    this.burst({ freq: 190 + Math.random() * 60, to: 80, q: 1.3, dur: 0.09, gain: 0.075, filter: 'bandpass' });
+    this.burst({ freq: 1500 + Math.random() * 700, to: 700, q: 3.5, dur: 0.03, gain: 0.02, filter: 'bandpass', delay: 0.01 });
+  };
+  /** the crackle of a campfire — sparse, irregular pops */
+  A.crackle = function () {
+    const n = 1 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < n; i++) {
+      this.burst({
+        freq: 900 + Math.random() * 1800, to: 400, q: 4.5,
+        dur: 0.02 + Math.random() * 0.03, gain: 0.014 + Math.random() * 0.018,
+        filter: 'bandpass', attack: 0.002, delay: Math.random() * 0.4, bus: this.busAmb
+      });
     }
   };
   A.boatMove = function () {

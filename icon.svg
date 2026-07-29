@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4fb3d9"/>
+      <stop offset="0.55" stop-color="#8fd0e8"/>
+      <stop offset="1" stop-color="#d9efc4"/>
+    </linearGradient>
+    <linearGradient id="hill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7cba5a"/>
+      <stop offset="1" stop-color="#4d8a3c"/>
+    </linearGradient>
+    <linearGradient id="field" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e6bb52"/>
+      <stop offset="1" stop-color="#c79233"/>
+    </linearGradient>
+    <clipPath id="round"><rect x="0" y="0" width="64" height="64" rx="14"/></clipPath>
+  </defs>
+
+  <g clip-path="url(#round)">
+    <rect width="64" height="64" fill="url(#sky)"/>
+
+    <!-- sun -->
+    <circle cx="14" cy="14" r="7.5" fill="#ffd24a"/>
+    <circle cx="14" cy="14" r="10.5" fill="#ffd24a" opacity="0.22"/>
+
+    <!-- far hills -->
+    <path d="M-2 34 q14 -11 27 -2 q13 -9 26 -1 q8 5 15 3 v34 h-70 z" fill="#69a85a" opacity="0.75"/>
+
+    <!-- main hill -->
+    <path d="M-2 40 q18 -12 34 -3 q16 -8 34 1 v28 h-68 z" fill="url(#hill)"/>
+
+    <!-- ploughed field rows -->
+    <path d="M-2 48 h68 v18 h-68 z" fill="url(#field)"/>
+    <g stroke="#a8762a" stroke-width="1.4" opacity="0.55">
+      <path d="M-2 51 h68"/><path d="M-2 55 h68"/><path d="M-2 59 h68"/><path d="M-2 63 h68"/>
+    </g>
+
+    <!-- barn -->
+    <g>
+      <rect x="35" y="27" width="19" height="15" fill="#c9503c"/>
+      <path d="M33 28 l11.5 -9.5 l11.5 9.5 z" fill="#8f3527"/>
+      <rect x="41.5" y="33" width="6" height="9" fill="#f0e2c4"/>
+      <rect x="44" y="33" width="1.2" height="9" fill="#c9a97a"/>
+      <rect x="41.5" y="36.6" width="6" height="1.2" fill="#c9a97a"/>
+    </g>
+
+    <!-- silo -->
+    <rect x="27" y="29" width="6.5" height="13" rx="1" fill="#dcd8cc"/>
+    <path d="M26.4 30 a3.9 3.9 0 0 1 7.8 0 z" fill="#9aa0a6"/>
+
+    <!-- wheat -->
+    <g stroke="#8a5f1f" stroke-width="1.6" stroke-linecap="round">
+      <path d="M12 62 V48"/><path d="M20 62 V51"/><path d="M6 62 V52"/>
+    </g>
+    <g fill="#f2c94c">
+      <ellipse cx="12" cy="46" rx="3.1" ry="4.6"/>
+      <ellipse cx="20" cy="49" rx="2.6" ry="3.9"/>
+      <ellipse cx="6" cy="50" rx="2.4" ry="3.6"/>
+    </g>
+    <g fill="#d9a92f" opacity="0.65">
+      <ellipse cx="12" cy="46" rx="1.1" ry="4.4"/>
+      <ellipse cx="20" cy="49" rx="0.9" ry="3.7"/>
+    </g>
+  </g>
+
+  <rect x="0.75" y="0.75" width="62.5" height="62.5" rx="13.5" fill="none" stroke="#1d3326" stroke-width="1.5" opacity="0.85"/>
+</svg>
