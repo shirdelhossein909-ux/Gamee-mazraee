@@ -411,10 +411,11 @@
   C.BUILDINGS = B;
 
   bld({
-    id: 'stable', name: 'اصطبل', icon: '🏇', cat: 'city', model: 'stable', size: [5, 4], max: 5, tier: 1, sk: 3,
-    desc: 'خانهٔ اسب‌ها و سوارکاران. هر سطح، جای یک سوارکار بیشتر می‌دهد تا برای آوردن مردم به سفر بروند.',
-    cost: (l) => Object.assign(scale({ wood: 45, stone: 20, fiber: 15 }, l), { coin: Math.round(180 * Math.pow(1.9, l - 1)) }),
-    effects: (l) => ({ happy: 2, riders: l })
+    id: 'stable', name: 'اصطبل', icon: '🏇', cat: 'city', model: 'stable', size: [14, 9], max: 5, tier: 1, sk: 3,
+    desc: 'سالن بلند اصطبل با ده باکس جدا. اسب‌های رام‌شده را ببر داخل تا هرکدام توی باکس خودش بایستد. سوارکارها هم از همین‌جا به سفر می‌روند.',
+    cost: (l) => Object.assign(scale({ wood: 90, stone: 45, plank: 20, fiber: 25 }, l), { coin: Math.round(420 * Math.pow(1.85, l - 1)) }),
+    /* passable: you can walk down the aisle of your own stable */
+    effects: (l) => ({ happy: 2, riders: l, stalls: C.HORSE.stallsPerStable, passable: true })
   });
 
   bld({
@@ -467,30 +468,39 @@
      already skilled at their trade. */
   const crew = (o) => { C.CREW[o.id] = o; };
   C.CREW = Object.create(null);
+  /* Every hire of the same trade costs meaningfully more than the last, so
+     a crew of ten is a real investment rather than a rounding error. `n` is
+     how many of THAT specialist you already employ. */
+  const hireCost = (base, growth) => (n) => Math.round(base * Math.pow(growth, n));
   crew({
-    id: 'hand', name: 'کارگر ساده', icon: '🧑‍🌾', job: 'stone',
+    id: 'hand', name: 'کارگر ساده', icon: '🧑‍🌾', job: 'stone', expert: false,
     desc: 'ارزان‌ترین نیرو. برای جمع کردن سنگ و چوب و کارهای ساده عالی است. سر میز شورا هر وظیفه‌ای بخواهی به او می‌دهی.',
-    cost: (n) => ({ coin: Math.round(90 * Math.pow(1.09, n)), bread: 1 })
+    cost: (n) => ({ coin: hireCost(140, 1.35)(n), bread: 1 + Math.floor(n / 3) })
   });
   crew({
-    id: 'logger', name: 'چوب‌بُر کارکشته', icon: '🪓', job: 'wood',
-    desc: 'با تبرش سریع‌تر از بقیه چوب می‌آورد و الیاف بیشتری پیدا می‌کند.',
-    cost: (n) => ({ coin: Math.round(320 * Math.pow(1.12, n)), plank: 4 })
+    id: 'logger', name: 'چوب‌بُر کارکشته', icon: '🪓', job: 'wood', expert: true,
+    desc: 'استاد تبر. سه برابر کارگر ساده چوب می‌آورد و الیاف بیشتری پیدا می‌کند.',
+    cost: (n) => ({ coin: hireCost(620, 1.45)(n), plank: 6 + n * 2 })
   });
   crew({
-    id: 'miner', name: 'معدن‌چی', icon: '⛏️', job: 'stone',
-    desc: 'رگه‌های زغال و آهن را می‌شناسد و بازدهش از کارگر ساده بیشتر است.',
-    cost: (n) => ({ coin: Math.round(480 * Math.pow(1.12, n)), iron: 3 })
+    id: 'miner', name: 'معدن‌چی', icon: '⛏️', job: 'stone', expert: true,
+    desc: 'رگه‌های زغال و آهن را می‌شناسد و سه برابر کارگر ساده استخراج می‌کند.',
+    cost: (n) => ({ coin: hireCost(880, 1.45)(n), iron: 4 + n * 2 })
   });
   crew({
-    id: 'ranger', name: 'شکارچی حرفه‌ای', icon: '🏹', job: 'hunt',
+    id: 'reaper', name: 'کشاورز کارکشته', icon: '🌾', job: 'farm', expert: true,
+    desc: 'مزرعه را خودش می‌چرخاند: می‌کارد، آب می‌دهد و سه برابر سریع‌تر برداشت می‌کند.',
+    cost: (n) => ({ coin: hireCost(700, 1.45)(n), bread: 4 + n * 2 })
+  });
+  crew({
+    id: 'ranger', name: 'شکارچی حرفه‌ای', icon: '🏹', job: 'hunt', expert: true,
     desc: 'کمان‌دار زبردست. حیوانات را از فاصلهٔ دور می‌زند و گوشت و پوست می‌آورد.',
-    cost: (n) => ({ coin: Math.round(900 * Math.pow(1.14, n)), iron: 6, cloth: 2 })
+    cost: (n) => ({ coin: hireCost(1500, 1.5)(n), iron: 8 + n * 3, cloth: 3 + n })
   });
   crew({
-    id: 'warden', name: 'نگهبان جنگی', icon: '🛡️', job: 'guard',
+    id: 'warden', name: 'نگهبان جنگی', icon: '🛡️', job: 'guard', expert: true,
     desc: 'گران اما ارزشش را دارد: شب‌ها جلوی گله‌های مهاجم می‌ایستد.',
-    cost: (n) => ({ coin: Math.round(1400 * Math.pow(1.15, n)), iron: 10, plank: 8 })
+    cost: (n) => ({ coin: hireCost(2400, 1.5)(n), iron: 12 + n * 4, plank: 10 + n * 3 })
   });
 
   /* ===================== HORSES ===================== */
@@ -504,7 +514,8 @@
     seat: 0.98,                   // hips land on the saddle, not above it
     seatBack: 0.18,               // and a little behind the withers
     speed: 13.5, accel: 5.2, turn: 3.2,
-    stableRange: 9,               // stand this close to the stable to house it
+    stableRange: 12,              // stand this close to the stable to house it
+    stallsPerStable: 10,          // boxes in the hall, one horse each
     ropeCost: { fiber: 4 },       // thrown when you tame — cheap but not free
     followRange: 14
   };
@@ -670,10 +681,21 @@
     { id: 'farm', name: 'کشاورز', icon: '🌾', desc: 'محصولات رسیده را خودش برداشت می‌کند.' },
     { id: 'guard', name: 'نگهبان', icon: '🛡️', desc: 'با کمان از شهر در برابر حیوانات مهاجم دفاع می‌کند.' }
   ];
-  /* In-game hours between one worker's deliveries. A day is twelve real
-     minutes, so this is about half a real minute — slow enough to matter,
-     fast enough that you can watch someone work and see it land. */
+  /* In-game hours between one worker's deliveries, before their rate.
+     A day is twelve real minutes, so 1.1h is about half a real minute. */
   C.JOB_TICK = 1.1;
+  /* Throughput is split between swinging faster and carrying more, so a
+     busy worker looks busy instead of frantic.
+       plain hand : TICK_MUL 2 x YIELD_MUL 1.75  = 3.5x the old rate
+       specialist : x1.5 faster again x2 the load = 3x a plain hand      */
+  C.WORKER = { tickMul: 2.0, yieldMul: 1.75 };
+  C.EXPERT = { tickMul: 1.5, yieldMul: 2.0 };
+  /* Hunting on foot was trivial, so every blow you land on an animal is
+     quartered. Villager hunters are untouched — they were well paced. */
+  C.HUNT_DIFFICULTY = 4;
+  /* Market multipliers on an item's base value. Buying costs more than it
+     did and more than selling returns, so coins have to be earned. */
+  C.PRICE = { sell: 1.6, buy: 3.4 };
 
   /* ===================== STARTING STATE ===================== */
   C.START = {

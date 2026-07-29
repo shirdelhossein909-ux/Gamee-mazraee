@@ -37,20 +37,58 @@
     for (const h of this.list) if (h.tame && h.stabled) n++;
     return n;
   };
-  /** how many horses the stables can house */
+  /** how many horses the stables can house — ten boxes per hall */
   Horses.prototype.stableSpace = function () {
-    let n = 0;
     const b = this.game.building;
     if (!b) return 0;
-    for (const s of b.list) if (s.defId === 'stable') n += 1 + s.level;
+    let n = 0;
+    for (const s of b.list) if (s.defId === 'stable') n += H.stallsPerStable;
     return n;
   };
+
+  /* Where box #i of a stable stands: five down each side of the aisle, the
+     horse facing its manger. Matches the boxes drawn by BM.stable. */
+  Horses.prototype.stallSpot = function (stable, i) {
+    const side = i < 5 ? -1 : 1;
+    const col = i % 5;
+    const lx = -13.4 / 2 + 1.46 + col * 2.62;
+    const lz = side * (8.4 / 2 - 1.9);
+    const c = Math.cos(stable.rot), s = Math.sin(stable.rot);
+    return {
+      x: stable.x + lx * c - lz * s,
+      z: stable.z + lx * s + lz * c,
+      yaw: stable.rot + (side < 0 ? Math.PI : 0)
+    };
+  };
+
+  /** claim the first free box across all stables */
+  Horses.prototype._claimStall = function (h) {
+    const b = this.game.building;
+    if (!b) return null;
+    const taken = Object.create(null);
+    for (const o of this.list) {
+      if (o !== h && o.stabled && o.stall) taken[o.stall.uid + ':' + o.stall.i] = 1;
+    }
+    for (const s of b.list) {
+      if (s.defId !== 'stable') continue;
+      for (let i = 0; i < H.stallsPerStable; i++) {
+        if (taken[s.uid + ':' + i]) continue;
+        return { uid: s.uid, i: i, stable: s };
+      }
+    }
+    return null;
+  };
+  /* "Near the stable" has to mean near the *building*, not a circle around
+     its centre — the hall is long, so a fixed radius misses its own yard at
+     the far end. Measure from the footprint instead. */
   Horses.prototype.stableNear = function (x, z) {
     const b = this.game.building;
     if (!b) return null;
     for (const s of b.list) {
       if (s.defId !== 'stable') continue;
-      if (U.dist2(x, z, s.x, s.z) < H.stableRange * H.stableRange) return s;
+      const dx = Math.max(0, Math.abs(x - s.x) - s.w / 2);
+      const dz = Math.max(0, Math.abs(z - s.z) - s.d / 2);
+      if (dx * dx + dz * dz < H.stableRange * H.stableRange) return s;
     }
     return null;
   };
@@ -76,7 +114,7 @@
     const h = {
       uid: this.uid++, x: o.x, y: o.y, z: o.z, yaw: Math.random() * 6.283,
       coat: o.coat, name: o.name, tame: !!o.tame, stabled: !!o.stabled,
-      rider: null, mounted: false,
+      rider: null, mounted: false, stall: o.stall || null,
       vx: 0, vz: 0, speed: 0, phase: Math.random() * 6.283,
       timer: Math.random() * 3, wanderYaw: Math.random() * 6.283,
       spook: 0, obj: null
@@ -230,21 +268,39 @@
     return true;
   };
 
-  /** leading a horse into the paddock houses it there */
+  /** leading a horse into the yard puts it in a free box */
   Horses.prototype._checkStable = function (h) {
     const g = this.game;
     const s = this.stableNear(h.x, h.z);
     if (!s) return false;
-    if (h.stabled) return true;
-    if (this.stabled() >= this.stableSpace()) {
-      g.ui.toast('🏇 اصطبل جا ندارد — ارتقایش بده یا اصطبل تازه بساز', 'bad');
+    if (h.stabled && h.stall) return true;
+    const stall = this._claimStall(h);
+    if (!stall) {
+      g.ui.toast('🏇 همهٔ باکس‌ها پر است — یک اصطبل دیگر بساز', 'bad');
       return false;
     }
     h.stabled = true;
-    h.home = { x: s.x, z: s.z };
+    h.stall = { uid: stall.uid, i: stall.i };
+    const spot = this.stallSpot(stall.stable, stall.i);
+    h.home = spot;
     g.audio.coin();
-    g.ui.toast('🏇 «' + h.name + '» در اصطبل جا گرفت (' + U.fa(this.stabled()) + '/' + U.fa(this.stableSpace()) + ')', 'gold');
+    g.ui.toast('🏇 «' + h.name + '» رفت توی باکس ' + U.fa(stall.i + 1) + ' (' +
+      U.fa(this.stabled()) + '/' + U.fa(this.stableSpace()) + ')', 'gold');
     return true;
+  };
+
+  /** re-find a stabled horse's box, e.g. after a load or a demolition */
+  Horses.prototype._refreshStall = function (h) {
+    const b = this.game.building;
+    if (!b || !h.stall) return false;
+    for (const s of b.list) {
+      if (s.uid === h.stall.uid && s.defId === 'stable') {
+        h.home = this.stallSpot(s, h.stall.i);
+        return true;
+      }
+    }
+    h.stabled = false; h.stall = null; h.home = null;   // its stable is gone
+    return false;
   };
 
   /** a working villager borrows a stabled horse */
@@ -302,9 +358,19 @@
       wantX = p.x - h.x; wantZ = p.z - h.z;
       speed = Math.min(9, 2.6 + pd * 0.22);
     } else if (h.tame && h.stabled && h.home) {
+      /* stand in its own box, facing the manger */
       const hd = U.dist(h.x, h.z, h.home.x, h.home.z);
-      if (hd > 5) { wantX = h.home.x - h.x; wantZ = h.home.z - h.z; speed = 3.4; }
-      else speed = 0;
+      if (hd > 0.35) {
+        wantX = h.home.x - h.x; wantZ = h.home.z - h.z;
+        speed = Math.min(3.4, 0.7 + hd * 1.2);
+      } else {
+        speed = 0;
+        h.x = U.damp(h.x, h.home.x, 6, dt);
+        h.z = U.damp(h.z, h.home.z, 6, dt);
+        if (h.home.yaw !== undefined) {
+          h.yaw += U.angleDelta(h.yaw, h.home.yaw) * Math.min(1, dt * 3);
+        }
+      }
     } else {
       if (h.timer <= 0) {
         h.timer = 2.5 + Math.random() * 4;
@@ -313,7 +379,7 @@
       }
       if (!h.graze) { wantX = Math.sin(h.wanderYaw); wantZ = Math.cos(h.wanderYaw); speed = 2.2; }
     }
-    this._step(h, wantX, wantZ, speed, dt, world);
+    this._step(h, wantX, wantZ, speed, dt, world, h.stabled && !!h.home);
     this._pose(h, dt, speed > 0.2);
   };
 
@@ -327,7 +393,7 @@
     this._pose(h, dt, !!v.moving);
   };
 
-  Horses.prototype._step = function (h, wantX, wantZ, speed, dt, world) {
+  Horses.prototype._step = function (h, wantX, wantZ, speed, dt, world, ghost) {
     const wl = Math.hypot(wantX, wantZ);
     if (wl < 0.0001 || speed < 0.05) {
       h.y = world.heightAt(h.x, h.z);
@@ -337,8 +403,10 @@
     const dx = (wantX / wl) * speed, dz = (wantZ / wl) * speed;
     const nx = h.x + dx * dt, nz = h.z + dz * dt;
     const nh = world.heightAt(nx, nz);
+    /* A horse heading for its own box walks in through the stable door —
+       the hall is solid to everything else. */
     const blocked = nh < W.waterLevel + 0.2 || Math.abs(nh - h.y) > 2.2 ||
-      (this.game.building && this.game.building.blocks(nx, nz, false));
+      (!ghost && this.game.building && this.game.building.blocks(nx, nz, false));
     if (blocked) { h.timer = 0; h.wanderYaw = Math.random() * 6.283; h.moving = false; }
     else { h.x = nx; h.z = nz; h.y = nh; h.moving = true; }
     h.yaw += U.angleDelta(h.yaw, Math.atan2(dx, dz)) * Math.min(1, dt * 6);
@@ -411,7 +479,7 @@
     for (const h of this.list) {
       if (!h.tame) continue;                 // wild ones respawn on their own
       out.push([Math.round(h.x * 10) / 10, Math.round(h.z * 10) / 10,
-      h.coat, h.name, h.stabled ? 1 : 0]);
+      h.coat, h.name, h.stabled ? 1 : 0, h.stall ? h.stall.uid : 0, h.stall ? h.stall.i : 0]);
     }
     return out;
   };
@@ -425,8 +493,13 @@
         coat: r[2], name: r[3], tame: true, stabled: !!r[4]
       });
       if (h.stabled) {
-        const s = this.stableNear(h.x, h.z);
-        if (s) h.home = { x: s.x, z: s.z }; else h.stabled = false;
+        h.stall = { uid: r[5] || 0, i: r[6] || 0 };
+        if (!this._refreshStall(h)) {
+          // its old stable did not survive: take any free box, or roam
+          const st = this._claimStall(h);
+          if (st) { h.stall = { uid: st.uid, i: st.i }; h.home = this.stallSpot(st.stable, st.i); }
+          else { h.stabled = false; h.stall = null; }
+        }
       }
     }
   };

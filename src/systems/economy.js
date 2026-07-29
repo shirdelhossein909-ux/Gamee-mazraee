@@ -40,15 +40,18 @@
     return Math.min(0.35, lv * 0.035);
   };
 
+  /* Everything in the market trades dearer than it used to. Buying scales
+     harder than selling, so stocking a town is a real cost while a good
+     harvest is still worth carrying in. */
   Economy.prototype.sellPrice = function (id) {
     const it = C.ITEMS[id];
     if (!it) return 0;
-    return Math.max(1, Math.round(it.value * (this.mult[id] || 1) * (1 + this.marketBonus())));
+    return Math.max(1, Math.round(it.value * C.PRICE.sell * (this.mult[id] || 1) * (1 + this.marketBonus())));
   };
   Economy.prototype.buyPrice = function (id) {
     const it = C.ITEMS[id];
     if (!it) return 0;
-    return Math.max(1, Math.round(it.value * (this.mult[id] || 1) * 1.75));
+    return Math.max(1, Math.round(it.value * C.PRICE.buy * (this.mult[id] || 1)));
   };
   Economy.prototype.trend = function (id) {
     const a = this.mult[id] || 1, b = this.prev[id] || 1;

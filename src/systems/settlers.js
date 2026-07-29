@@ -19,6 +19,7 @@
     this.game = game;
     this.residents = C.SETTLERS.start;
     this.jobs = Object.create(null);            // jobId -> how many people on it
+    this.crew = Object.create(null);            // crewId -> how many hired
     for (const j of C.JOBS) this.jobs[j.id] = 0;
     this.riders = [];
     this.group = new THREE.Group();
@@ -138,15 +139,32 @@
   /* Hire a specific tradesperson from the build menu. They arrive already
      pointed at their trade, so if there is a free job slot the duty is set
      for you — otherwise they idle until you sort it out at the council. */
+  /** how many of a given specialist you already employ */
+  Settlers.prototype.crewOwned = function (id) { return this.crew[id] || 0; };
+  /** hired experts on a job — the first this many workers on it are experts */
+  Settlers.prototype.expertsOn = function (job) {
+    let n = 0;
+    for (const id in C.CREW) {
+      const def = C.CREW[id];
+      if (def.expert && def.job === job) n += this.crew[id] || 0;
+    }
+    return n;
+  };
+  Settlers.prototype.crewCost = function (id) {
+    const def = C.CREW[id];
+    return def ? def.cost(this.crewOwned(id)) : null;
+  };
+
   Settlers.prototype.hireCrew = function (id) {
     const g = this.game, def = C.CREW[id];
     if (!def) return false;
     if (this.spareHomes() < 1) {
       g.ui.toast('🏠 خانهٔ خالی نداری — اول خانه بساز', 'bad'); g.audio.deny(); return false;
     }
-    const cost = def.cost(this.residents);
+    const cost = this.crewCost(id);
     if (!g.inv.canAfford(cost)) { g.ui.toast('⚠️ منابع کافی نداری', 'bad'); g.audio.deny(); return false; }
     g.inv.pay(cost);
+    this.crew[id] = this.crewOwned(id) + 1;
     this.addResidents(1);
     g.progress.stat('hire', 1);
     g.audio.coin();
@@ -353,6 +371,7 @@
     return {
       residents: this.residents,
       jobs: this.jobs,
+      crew: this.crew,
       riders: this.riders.map(function (r) {
         return [r.level, r.state === 'idle' ? 'idle' : 'away',
         Math.round(r.trip * 100) / 100, r.tripLen, r.bring];
@@ -365,6 +384,8 @@
     if (!d) { this.residents = C.SETTLERS.start; return; }
     this.residents = d.residents === undefined ? C.SETTLERS.start : d.residents;
     for (const j of C.JOBS) this.jobs[j.id] = (d.jobs && d.jobs[j.id]) || 0;
+    this.crew = Object.create(null);
+    if (d.crew) for (const k in d.crew) if (C.CREW[k]) this.crew[k] = d.crew[k];
     if (d.riders) {
       for (const r of d.riders) {
         this.riders.push({

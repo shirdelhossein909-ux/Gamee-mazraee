@@ -23,6 +23,15 @@
     farm: { shirt: 0x8a8a3a, hat: 0xc7a24d },
     guard: { shirt: 0x8a3a3a, hat: 0x6a6a72 }
   };
+  /* A hired specialist wears the same trade colours in a brighter cut, with
+     a diamond at the collar — spot the expensive one across the field. */
+  const EXPERT_LOOK = {
+    wood: { shirt: 0x2f9ec4, hat: 0x1f7fa8 },
+    stone: { shirt: 0x3fa6c8, hat: 0x2a86a8 },
+    hunt: { shirt: 0x2fb0a0, hat: 0x1f8f82 },
+    farm: { shirt: 0x46b8c8, hat: 0x2f96a8 },
+    guard: { shirt: 0x5a86d8, hat: 0x3f62b0 }
+  };
   const HUNT_RANGE = 9;      // a hunter draws his bow from here
   /* straight on first, then wider and wider sidesteps around an obstacle */
   const SIDESTEPS = [0, 0.6, -0.6, 1.2, -1.2, 1.9, -1.9];
@@ -93,10 +102,11 @@
       let moving = false;
 
       if (v.working) {
-        /* standing at the work site */
-        v.workT += hours;
+        /* standing at the work site — an expert swings faster too */
+        const tickMul = C.WORKER.tickMul * (v.expert ? C.EXPERT.tickMul : 1);
+        v.workT += hours * tickMul;
         v.swing = (v.swing || 0) - dt;
-        if (v.swing <= 0) { v.swing = 0.75; v.swingAnim = 1; }
+        if (v.swing <= 0) { v.swing = 0.75 / tickMul; v.swingAnim = 1; }
         if (v.workT >= C.JOB_TICK) { v.workT = 0; this._yield(v); }
       } else if (d > 1.1) {
         const step = v.speed * v.mul * dt;
@@ -219,12 +229,20 @@
 
   /* ===================== JOB ASSIGNMENT ===================== */
   Villagers.prototype._assignJobs = function () {
-    const jobs = this.game.settlers.jobList();      // flat array, one per worker
+    const S = this.game.settlers;
+    const jobs = S.jobList();                       // flat array, one per worker
+    /* The specialists you paid for take the first seats on their own trade,
+       so hiring a miner really does put a miner on the rocks. */
+    const left = Object.create(null);
+    for (const j of C.JOBS) left[j.id] = S.expertsOn(j.id);
     for (let i = 0; i < this.list.length; i++) {
       const want = jobs[i] || 'idle';
       const v = this.list[i];
-      if (v.job !== want) {
+      const expert = want !== 'idle' && left[want] > 0;
+      if (expert) left[want]--;
+      if (v.job !== want || v.expert !== expert) {
         v.job = want;
+        v.expert = expert;
         v.working = false;
         v.hasTarget = false;
         v.think = 0;
@@ -352,10 +370,11 @@
   Villagers.prototype._yield = function (v) {
     const g = this.game;
     const skillBonus = 1 + g.progress.skill('building').level * 0.02;
+    const load = C.WORKER.yieldMul * (v.expert ? C.EXPERT.yieldMul : 1);
     const got = [];
     let full = false;
     const give = (id, n) => {
-      n = Math.max(1, Math.round(n * skillBonus));
+      n = Math.max(1, Math.round(n * skillBonus * load));
       if (g.inv.add(id, n, true)) got.push(C.ITEMS[id].icon + U.fa(n));
       else full = true;
     };
@@ -382,7 +401,15 @@
       case 'farm': {
         const p = v.plot;
         if (!p) { v.think = 0; v.working = false; return; }
-        if (p.crop && p.stage >= 3) g.farming.harvest(p);
+        if (p.crop && p.stage >= 3) {
+          const crop = p.crop;
+          g.farming.harvest(p);
+          // a trained hand gets more out of the same row
+          if (load > 1 && C.CROPS[crop]) {
+            const bonus = Math.round((load - 1) * 1.5);
+            if (bonus > 0) g.inv.add(crop, bonus, true);
+          }
+        }
         else if (p.crop && p.moisture < 0.3) {
           /* the farmhand carries their own water — no bucket errands */
           p.moisture = Math.min(1, p.moisture + 0.85);
@@ -456,13 +483,14 @@
 
   /* ===================== SPAWN / DESPAWN ===================== */
   Villagers.prototype._look = function (v) {
-    const j = JOB_LOOK[v.job];
+    const j = (v.expert ? EXPERT_LOOK : JOB_LOOK)[v.job];
     return {
       shirt: j ? j.shirt : v.baseShirt,
-      pants: v.basePants,
+      pants: v.expert ? 0x2a3a52 : v.basePants,
       hair: v.baseHair,
       hat: j ? j.hat : (v.baseHat ? 0xc7a24d : null),
-      apron: v.job === 'farm'
+      apron: v.job === 'farm',
+      gem: !!v.expert
     };
   };
 

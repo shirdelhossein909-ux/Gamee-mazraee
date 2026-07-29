@@ -112,13 +112,16 @@
     return false;
   };
 
-  /** is this point in mid-air swallowed by a structure? used by the camera boom */
-  Building.prototype.solidAt = function (x, y, z, pad) {
+  /* Is this point in mid-air swallowed by a structure? Used by the camera
+     boom — which passes forPlayer, because anywhere you can walk (the aisle
+     of your own stable, a market awning) the camera has to be able to
+     follow you, or it gets shoved outside and you stare at a wall. */
+  Building.prototype.solidAt = function (x, y, z, pad, forPlayer) {
     const arr = this._at(x, z);
     if (!arr) return false;
     pad = pad || 0;
     for (const b of arr) {
-      if (b.def.id === 'lamp') continue;
+      if (ghostly(b, forPlayer)) continue;
       if (!inside(b, x, z, pad)) continue;
       if (y >= b.y - 0.4 && y <= b.y + (b.h || 3) + pad) return true;
     }
@@ -126,12 +129,12 @@
   };
 
   /** world-space height of the tallest roof over this spot, or -Infinity */
-  Building.prototype.roofAt = function (x, z, pad) {
+  Building.prototype.roofAt = function (x, z, pad, forPlayer) {
     const arr = this._at(x, z);
     if (!arr) return -Infinity;
     let top = -Infinity;
     for (const b of arr) {
-      if (b.def.id === 'lamp') continue;
+      if (ghostly(b, forPlayer)) continue;
       if (!inside(b, x, z, pad || 0)) continue;
       const t = b.y + (b.h || 3);
       if (t > top) top = t;

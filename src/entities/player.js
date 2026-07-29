@@ -364,7 +364,7 @@
         const t = (i / STEPS) * want;
         const px = this.pos.x + dx * t, py = targetY + sp * t, pz = this.pos.z + dz * t;
         if (py < world.heightAt(px, pz) + 0.7) return ((i - 1) / STEPS) * want;
-        if (bld && bld.solidAt(px, py, pz, 0.5)) return ((i - 1) / STEPS) * want;
+        if (bld && bld.solidAt(px, py, pz, 0.5, true)) return ((i - 1) / STEPS) * want;
       }
       return want;
     };
@@ -407,12 +407,12 @@
       let roof = -Infinity;
       for (let i = 1; i <= 5; i++) {
         const t = (i / 5) * d;
-        const s = bld.roofAt(this.pos.x + dirX * t, this.pos.z + dirZ * t, 0.5);
+        const s = bld.roofAt(this.pos.x + dirX * t, this.pos.z + dirZ * t, 0.5, true);
         if (s > roof) roof = s;
       }
       if (roof > -Infinity && roof + 1.0 <= targetY + d * 1.4) wantY = Math.max(wantY, roof + 1.0);
       let n = 0;
-      while (n < 10 && bld.solidAt(wantX, wantY, wantZ, 0.35)) {
+      while (n < 10 && bld.solidAt(wantX, wantY, wantZ, 0.35, true)) {
         n++;
         const t = Math.max(0.6, d * (1 - n / 10));
         wantX = this.pos.x + dirX * t;

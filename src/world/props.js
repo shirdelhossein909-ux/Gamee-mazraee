@@ -1164,34 +1164,101 @@
     return g;
   };
 
+  /* A real stable: one long hall with a central aisle and ten boxes, five
+     down each side. Horses you lead inside stand in their own stall — see
+     stallSpot() in horses.js for where each one parks. */
   BM.stable = function (l) {
     const p = [];
-    const w = 4.6, d = 3.4, h = 2.3 + l * 0.14;
-    p.push({ g: P.box, c: COL.stoneDark, p: [0, 0.1, 0], s: [w + 0.4, 0.2, d + 0.4] });
-    p.push({ g: P.box, c: l >= 3 ? COL.plank : COL.wood, p: [0, 0.2 + h / 2, -0.4], s: [w, h, d * 0.78] });
-    gable(p, 0, 0.2 + h, -0.4, w + 0.4, d * 0.85, 1.0, 0x7a4a28);
-    // stall doors (half-doors, open at the top)
-    for (let i = -1; i <= 1; i++) {
-      p.push({ g: P.box, c: COL.woodDark, p: [i * 1.5, 0.6, d * 0.0 + 1.0], s: [1.15, 0.8, 0.09] });
-      p.push({ g: P.box, c: 0x14100e, p: [i * 1.5, 1.35, d * 0.0 + 1.0], s: [1.15, 0.7, 0.06] });
-      p.push({ g: P.box, c: COL.wood, p: [i * 1.5, 1.0, d * 0.0 + 1.02], s: [1.3, 0.1, 0.11] });
+    const W = 13.4, D = 8.4;                 // hall footprint
+    const wall = 2.9 + l * 0.12;
+    const half = W / 2, hd = D / 2;
+
+    // stone footing + packed-earth aisle
+    p.push({ g: P.box, c: COL.stoneDark, p: [0, 0.1, 0], s: [W + 0.7, 0.2, D + 0.7] });
+    p.push({ g: P.box, c: COL.stone, p: [0, 0.21, 0], s: [W + 0.2, 0.06, D + 0.2] });
+    p.push({ g: P.box, c: 0x6b5540, p: [0, 0.25, 0], s: [W - 0.6, 0.05, 2.5] });
+
+    // long side walls, with a window per stall
+    const wallCol = l >= 3 ? COL.plank : COL.wood;
+    for (const sz of [-1, 1]) {
+      p.push({ g: P.box, c: wallCol, p: [0, 0.24 + wall / 2, sz * hd], s: [W, wall, 0.3] });
+      for (let i = 0; i < 5; i++) {
+        const x = -half + 1.34 + i * 2.68;
+        p.push({ g: P.box, c: COL.glassLit, glow: true, p: [x, 0.24 + wall * 0.72, sz * (hd + 0.03)], s: [0.85, 0.62, 0.1] });
+        p.push({ g: P.box, c: COL.woodDark, p: [x, 0.24 + wall * 0.72, sz * (hd + 0.07)], s: [0.97, 0.1, 0.06] });
+        p.push({ g: P.box, c: COL.woodDark, p: [x, 0.24 + wall * 0.72, sz * (hd + 0.07)], r: [0, 0, 1.5708], s: [0.1, 0.97, 0.06] });
+      }
     }
-    // paddock fence
-    for (let i = 0; i < 6; i++) {
-      const x = -w / 2 + 0.2 + i * (w / 5.2);
-      p.push({ g: P.cyl6, c: COL.woodDark, p: [x, 0.55, d * 0.85], s: [0.16, 1.1, 0.16] });
+    // gable ends with big double doors
+    for (const sx of [-1, 1]) {
+      p.push({ g: P.box, c: wallCol, p: [sx * half, 0.24 + wall / 2, 0], s: [0.3, wall, D] });
+      for (const off of [-0.72, 0.72]) {
+        p.push({ g: P.box, c: COL.woodDark, p: [sx * (half + 0.04), 0.24 + wall * 0.44, off], s: [0.1, wall * 0.86, 1.34] });
+      }
+      p.push({ g: P.box, c: COL.iron, p: [sx * (half + 0.1), 0.24 + wall * 0.86, 0], s: [0.07, 0.1, 3.0] });
+      p.push({ g: P.box, c: COL.thatch, p: [sx * (half + 0.05), 0.24 + wall + 0.75, 0], s: [0.12, 0.8, 1.1] });
     }
-    p.push({ g: P.box, c: COL.wood, p: [0, 0.9, d * 0.85], s: [w, 0.1, 0.1] });
-    p.push({ g: P.box, c: COL.wood, p: [0, 0.55, d * 0.85], s: [w, 0.1, 0.1] });
-    // hay + trough
-    p.push({ g: P.box, c: COL.thatch, p: [w * 0.62, 0.42, d * 0.4], r: [0, 0.4, 0], s: [1.0, 0.85, 1.0] });
-    p.push({ g: P.box, c: COL.woodDark, p: [-w * 0.62, 0.3, d * 0.4], s: [0.7, 0.4, 1.4] });
+
+    // ten boxes: divider walls off each side wall, leaving the aisle clear
+    for (const sz of [-1, 1]) {
+      for (let i = 0; i <= 5; i++) {
+        const x = -half + 0.15 + i * 2.62;
+        p.push({ g: P.box, c: COL.woodDark, p: [x, 0.24 + 1.05, sz * (hd - 1.35)], s: [0.16, 2.1, 2.5] });
+      }
+      for (let i = 0; i < 5; i++) {
+        const x = -half + 1.46 + i * 2.62;
+        // half-door onto the aisle, open at the top, with an iron latch
+        p.push({ g: P.box, c: l >= 2 ? COL.plank : COL.wood, p: [x, 0.24 + 0.6, sz * 1.28], s: [2.3, 1.2, 0.14] });
+        p.push({ g: P.box, c: COL.woodDark, p: [x, 0.24 + 1.24, sz * 1.28], s: [2.4, 0.14, 0.2] });
+        for (let b = 0; b < 4; b++) {
+          p.push({ g: P.cyl6, c: COL.iron, p: [x - 0.8 + b * 0.53, 0.24 + 1.62, sz * 1.28], s: [0.06, 0.78, 0.06] });
+        }
+        p.push({ g: P.sph, c: COL.gold, p: [x + 1.0, 0.24 + 0.75, sz * 1.36], s: [0.13, 0.13, 0.13] });
+        // manger and a bucket at the back of each box
+        p.push({ g: P.box, c: COL.woodDark, p: [x, 0.42, sz * (hd - 0.5)], s: [1.5, 0.36, 0.5] });
+        p.push({ g: P.box, c: COL.thatch, p: [x, 0.6, sz * (hd - 0.5)], s: [1.2, 0.16, 0.36] });
+      }
+    }
+
+    // roof: long gable along the hall, with a vented cupola on the ridge
+    gable(p, 0, 0.24 + wall, 0, W + 1.0, D + 1.0, 2.4, l >= 4 ? 0x5a4a6a : 0x7a4a28);
+    p.push({ g: P.box, c: COL.woodDark, p: [0, 0.24 + wall - 0.08, 0], s: [W + 1.2, 0.14, D + 1.2] });
+    for (let i = -3; i <= 3; i++) {
+      for (const sz of [-1, 1]) {
+        p.push({ g: P.box, c: COL.woodDark, p: [i * 1.9, 0.24 + wall + 0.06, sz * (hd + 0.42)], s: [0.12, 0.14, 0.5] });
+      }
+    }
+    const ridge = 0.24 + wall + 2.4;
+    p.push({ g: P.box, c: wallCol, p: [0, ridge + 0.45, 0], s: [2.2, 0.9, 1.6] });
+    p.push({ g: P.box, c: 0x1c1410, p: [0, ridge + 0.5, 0.82], s: [1.5, 0.5, 0.06] });
+    p.push({ g: P.pyr, c: l >= 4 ? 0x5a4a6a : 0x7a4a28, p: [0, ridge + 1.15, 0], s: [2.6, 0.9, 2.0] });
     if (l >= 2) {
-      p.push({ g: P.cone5, c: 0xd23b32, p: [0, 0.2 + h + 1.25, -0.4], s: [0.5, 0.6, 0.5] });
+      // weather vane: a running horse
+      p.push({ g: P.cyl6, c: COL.iron, p: [0, ridge + 1.9, 0], s: [0.07, 0.9, 0.07] });
+      p.push({ g: P.box, c: COL.gold, p: [0, ridge + 2.4, 0], s: [0.9, 0.34, 0.07] });
+      p.push({ g: P.box, c: COL.gold, p: [0.38, ridge + 2.62, 0], s: [0.24, 0.3, 0.07] });
     }
-    if (l >= 4) {
-      p.push({ g: P.box, c: COL.gold, p: [0, 0.2 + h * 0.5, 1.75], s: [1.0, 0.35, 0.08] });
-      p.push({ g: P.sph, c: COL.glassLit, glow: true, p: [w * 0.42, 2.1, 1.1], s: [0.26, 0.26, 0.26] });
+
+    // yard: paddock rail, water trough, hay stack, mounting block
+    p.push({ g: P.box, c: COL.woodDark, p: [0, 0.42, hd + 3.3], s: [1.9, 0.5, 1.0] });
+    p.push({ g: P.box, c: 0x3f7fa8, p: [0, 0.6, hd + 3.3], s: [1.6, 0.14, 0.78] });
+    for (let i = 0; i < 6; i++) {
+      p.push({ g: P.cyl6, c: COL.woodDark, p: [-half + 0.6 + i * 2.4, 0.72, hd + 4.6], s: [0.16, 1.4, 0.16] });
+    }
+    for (const y of [0.6, 1.05]) {
+      p.push({ g: P.box, c: COL.wood, p: [0, y, hd + 4.6], s: [W - 0.6, 0.11, 0.11] });
+    }
+    p.push({ g: P.box, c: COL.thatch, p: [half - 1.6, 0.75, hd + 2.9], r: [0, 0.35, 0], s: [2.0, 1.4, 2.0] });
+    p.push({ g: P.box, c: COL.stone, p: [-half + 1.6, 0.4, hd + 2.6], s: [1.1, 0.4, 0.9] });
+    p.push({ g: P.box, c: COL.stone, p: [-half + 1.6, 0.72, hd + 2.85], s: [1.1, 0.3, 0.5] });
+    if (l >= 3) {
+      for (const sx of [-1, 1]) {
+        p.push({ g: P.cyl6, c: COL.woodDark, p: [sx * (half + 0.55), 1.3, hd + 0.3], s: [0.14, 2.6, 0.14] });
+        p.push({ g: P.sph, c: COL.glassLit, glow: true, p: [sx * (half + 0.55), 2.5, hd + 0.3], s: [0.3, 0.34, 0.3] });
+      }
+    }
+    if (l >= 5) {
+      p.push({ g: P.box, c: COL.gold, p: [0, 0.24 + wall + 0.55, hd + 0.62], s: [4.2, 0.5, 0.12] });
     }
     return assemble(p);
   };
@@ -1328,6 +1395,14 @@
     tp.push({ g: P.box, c: shirt, p: [0, 0.32, 0], s: [0.62, 0.68, 0.36] });
     tp.push({ g: P.box, c: pants, p: [0, -0.05, 0], s: [0.64, 0.22, 0.38] });
     if (opt.apron) tp.push({ g: P.box, c: 0xd8d2c0, p: [0, 0.25, 0.2], s: [0.44, 0.6, 0.04] });
+    if (opt.gem) {
+      // a hired specialist wears a diamond at the collar
+      tp.push({ g: P.box, c: 0xdcecf4, p: [0, 0.58, 0], s: [0.66, 0.1, 0.4] });
+      tp.push({ g: P.ico, c: 0x9fe8ff, glow: true, p: [0, 0.5, 0.2], s: [0.17, 0.22, 0.17] });
+      for (const sx of [-1, 1]) {
+        tp.push({ g: P.box, c: 0xdcecf4, p: [sx * 0.33, 0.34, 0], s: [0.06, 0.62, 0.37] });
+      }
+    }
     const torso = assemble(tp, false);
     torso.position.y = 0.86;
     g.add(torso);

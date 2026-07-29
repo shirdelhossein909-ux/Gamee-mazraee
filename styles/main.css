@@ -242,6 +242,21 @@ kbd{
 .crew-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .crew-note small{display:block;margin-top:9px;color:var(--muted);font-size:11.5px;line-height:1.85}
 
+/* ---- specialists read as diamond-grade everywhere they appear ---- */
+.card.expert{
+  position:relative;border-color:rgba(159,232,255,.5);
+  background:linear-gradient(180deg,rgba(159,232,255,.11),rgba(159,232,255,.04))
+}
+.card.expert .badge{
+  display:inline-block;margin-bottom:6px;padding:3px 9px;border-radius:99px;font-size:10.5px;font-weight:700;
+  color:#062733;background:linear-gradient(180deg,#bff0ff,#6fd0ee);box-shadow:0 0 12px rgba(159,232,255,.45)
+}
+.job.expert{border-color:rgba(159,232,255,.45);background:rgba(159,232,255,.09)}
+.job .jmix{
+  display:inline-block;margin-right:7px;padding:2px 8px;border-radius:99px;font-size:10.5px;font-weight:700;
+  color:#062733;background:linear-gradient(180deg,#bff0ff,#6fd0ee)
+}
+
 /* ===================== PANELS ===================== */
 #panels{position:absolute;inset:0;z-index:40;display:flex;align-items:center;justify-content:center}
 .panel-shade{position:absolute;inset:0;background:rgba(4,10,9,.62);backdrop-filter:blur(3px);animation:fade .2s ease}

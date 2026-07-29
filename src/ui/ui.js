@@ -972,10 +972,11 @@
 
     for (const id in C.CREW) {
       const def = C.CREW[id];
-      const cost = def.cost(S.residents);
+      const owned = S.crewOwned(id);
+      const cost = S.crewCost(id);
       const afford = g.inv.canAfford(cost);
       const d = document.createElement('div');
-      d.className = 'card' + (spare > 0 ? '' : ' locked');
+      d.className = 'card' + (spare > 0 ? '' : ' locked') + (def.expert ? ' expert' : '');
       let costHtml = '';
       for (const k in cost) {
         const have = k === 'coin' ? g.inv.coins : g.inv.count(k);
@@ -983,7 +984,10 @@
         costHtml += '<span class="' + (have >= cost[k] ? '' : 'no') + '">' + icon + ' ' + U.fa(cost[k]) + '</span>';
       }
       const job = C.JOBS.filter((j) => j.id === def.job)[0];
-      d.innerHTML = '<div class="ci">' + def.icon + '</div><div class="cn">' + def.name +
+      d.innerHTML =
+        (def.expert ? '<div class="badge">💎 حرفه‌ای — ۳ برابر کارگر ساده</div>' : '') +
+        '<div class="ci">' + def.icon + '</div><div class="cn">' + def.name +
+        (owned ? ' <span style="color:var(--muted);font-size:11px">×' + U.fa(owned) + '</span>' : '') +
         '</div><div class="cd">' + def.desc + '</div>' +
         '<div class="cd" style="color:var(--gold)">کار پیشنهادی: ' + job.icon + ' ' + job.name + '</div>' +
         '<div class="cc">' + costHtml + '</div>' +
@@ -1273,10 +1277,16 @@
     for (const j of C.JOBS) {
       if (j.id === 'idle') continue;
       const n = S.jobs[j.id] || 0;
+      const ex = Math.min(n, S.expertsOn(j.id));
       const d = document.createElement('div');
-      d.className = 'job' + (n > 0 ? ' on' : '');
+      d.className = 'job' + (n > 0 ? ' on' : '') + (ex > 0 ? ' expert' : '');
+      /* spell out how many of these are the specialists you paid for */
+      const mix = ex > 0
+        ? '<span class="jmix">💎 ' + U.fa(ex) + ' حرفه‌ای' +
+        (n - ex > 0 ? ' · ' + U.fa(n - ex) + ' ساده' : '') + '</span>'
+        : '';
       d.innerHTML = '<span class="ji">' + j.icon + '</span>' +
-        '<span class="jn"><b>' + j.name + '</b><small>' + j.desc + '</small></span>' +
+        '<span class="jn"><b>' + j.name + '</b>' + mix + '<small>' + j.desc + '</small></span>' +
         '<span class="jcount">' + U.fa(n) + '</span>';
       const btns = document.createElement('span');
       btns.className = 'jbtns';
