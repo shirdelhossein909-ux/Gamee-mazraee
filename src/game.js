@@ -258,6 +258,7 @@
     if (this.settlers) this.settlers.clear();
     if (this.audio) this.audio.engineStop();
     if (this.building) {
+      this.building.cancel();      // a move in progress puts its building back
       while (this.building.list.length) this.building.demolish(this.building.list[0], false);
     }
     if (this.farming) {
@@ -339,6 +340,12 @@
       else ui.openPanel('menu');
     }
     if (IN.pressed('KeyF')) { if (IN.locked) IN.unlock(); else IN.lock(); }
+    /* G: grab whatever you are looking at and move it */
+    if (IN.gpressed('KeyG') && !this.building.placing) {
+      const t = this.gather.target;
+      if (t && t.kind === 'building') this.building.startMove(t.building);
+      else ui.toast('🔀 اول به ساختمانی که می‌خواهی جابه‌جا کنی نگاه کن', 'bad');
+    }
     if (IN.gpressed('KeyV') && !this.building.placing) {
       /* one key for every saddle: horse first, then boat or car */
       if (this.horses.mounted || this.horses.nearest(this.player.pos.x, this.player.pos.z, 6, true)) {
@@ -377,8 +384,13 @@
     if (IN.clicked(0)) {
       if (this.building.placing) this.building.confirm();
       else if (this.player.mount) {
-        // hands are on the reins — but you can always eat in the saddle
-        if (ui.currentTool() === 'food') { ui.swingSlot(); this.gather.eat(); }
+        /* One hand on the reins is enough for a blade, a bow or a bite —
+           hunting from the saddle is half the point of having a horse. */
+        const tool = ui.currentTool();
+        if (tool === 'sword' || tool === 'bow' || tool === 'food') {
+          ui.swingSlot();
+          this.gather.use(tool);
+        }
       } else {
         ui.swingSlot();
         this.gather.use(ui.currentTool());

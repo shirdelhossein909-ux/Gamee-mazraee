@@ -332,6 +332,13 @@
       const h = this.list[i];
       /* wild horses far away are forgotten; tamed ones are never dropped */
       if (!h.tame && U.dist2(h.x, h.z, p.x, p.z) > 170 * 170) { this._remove(i); continue; }
+      /* Never leave a horse wedged in a wall — a table built on top of one
+         used to trap it for good. Its own stall is the one place it is
+         allowed to stand inside a structure. */
+      if (g.building && !(h.stabled && h.home)) {
+        const esc = g.building.escapeFrom(h.x, h.z, 0.4, false);
+        if (esc) { h.x = esc.x; h.z = esc.z; h.y = world.heightAt(h.x, h.z); }
+      }
       if (h === this.mounted) { this._ride(h, dt); continue; }
       if (h.rider) { this._carry(h, dt); continue; }
       this._roam(h, dt, world, p);

@@ -317,14 +317,68 @@
     this.game.ui.showBuildBar(def);
   };
 
+  /* Pick a finished building back up and set it down somewhere else.
+
+     It comes out of the world into the same ghost the build menu uses, so
+     you get the identical preview, grid snap and R-to-rotate — and it costs
+     nothing, because you already paid. Everything about it rides along:
+     level, colours, damage, production timer, whatever is burning in it. */
+  Building.prototype.startMove = function (b) {
+    if (!b || this.list.indexOf(b) < 0) return false;
+    this.cancel();
+    const saved = {
+      defId: b.defId, def: b.def, level: b.level, rot: b.rot, variant: b.variant,
+      hp: b.hp, prodT: b.prodT || 0, fuel: b.fuel, lit: b.lit, autoFeed: b.autoFeed,
+      fromX: b.x, fromZ: b.z, fromRot: b.rot
+    };
+    this.demolish(b, false);            // out of the world, nothing refunded
+
+    const ghost = M.building(saved.defId, saved.level, undefined, saved.variant);
+    ghost.traverse(function (o) { if (o.isMesh) { o.material = M.MAT.ghostOk; o.castShadow = false; } });
+    this.group.add(ghost);
+    const fp = footprint(saved.def, saved.rot);
+    const ring = M.selectRing();
+    ring.scale.set(Math.max(fp.w, fp.d) * 0.9, 1, Math.max(fp.w, fp.d) * 0.9);
+    this.group.add(ring);
+    this.placing = {
+      defId: saved.defId, def: saved.def, obj: ghost, ring: ring,
+      rot: saved.rot, valid: false, x: saved.fromX, y: 0, z: saved.fromZ,
+      mask: -1, level: saved.level, moving: saved
+    };
+    this.game.ui.showBuildBar(saved.def, true);
+    this.game.ui.toast('🔀 جابه‌جا کن — کلیک چپ: گذاشتن · R: چرخاندن · ESC: برگرداندن', 'good');
+    return true;
+  };
+
   Building.prototype.cancel = function () {
     if (!this.placing) return;
+    const mv = this.placing.moving;
     this.group.remove(this.placing.obj);
     this.group.remove(this.placing.ring);
     disposeTree(this.placing.obj);
     this.placing = null;
     this.showBorder(false);
     this.game.ui.hideBuildBar();
+    // a move that is called off puts the building back exactly where it was
+    if (mv) {
+      const b = this._restore(mv, mv.fromX, mv.fromZ, mv.fromRot);
+      if (b) this.game.ui.toast('↩️ سر جای اولش برگشت', 'good');
+    }
+  };
+
+  /** put a picked-up building back down with everything it was carrying */
+  Building.prototype._restore = function (s, x, z, rot) {
+    const b = this.place(s.defId, x, z, rot, s.level, s.variant);
+    if (!b) return null;
+    b.hp = Math.min(b.maxHp, s.hp);
+    b.prodT = s.prodT;
+    if (s.fuel !== undefined) {
+      b.fuel = s.fuel;
+      b.lit = s.lit;
+      b.autoFeed = s.autoFeed;
+      this._paintFire(b);
+    }
+    return b;
   };
 
   Building.prototype.rotate = function () {
@@ -340,7 +394,7 @@
   };
 
   /** validate a candidate spot; returns {ok, why} */
-  Building.prototype.validate = function (defId, x, z, rot, level) {
+  Building.prototype.validate = function (defId, x, z, rot, level, free) {
     const def = C.BUILDINGS[defId];
     const fp = footprint(def, rot);
     const world = this.game.world;
@@ -381,6 +435,8 @@
     const nodes = this.game.world.nodesNear(x, z, Math.max(fp.w, fp.d) * 0.6 + 0.6);
     if (nodes.length) return { ok: false, why: 'اول ' + nodes[0].name + ' را بردار' };
 
+    /* moving something you already own costs nothing */
+    if (free) return { ok: true, y: f.avg, cost: {} };
     const cost = def.cost(level || 1);
     if (!this.game.inv.canAfford(cost)) return { ok: false, why: 'منابع کافی نداری', cost: cost };
     return { ok: true, y: f.avg, cost: cost };
@@ -409,13 +465,13 @@
         p.mask = mask;
         this.group.remove(p.obj);
         disposeTree(p.obj);
-        p.obj = M.building(p.defId, 1, mask);
+        p.obj = M.building(p.defId, p.level || 1, mask, p.moving ? p.moving.variant : 0);
         p.obj.traverse(function (o) { if (o.isMesh) { o.material = M.MAT.ghostOk; o.castShadow = false; } });
         this.group.add(p.obj);
       }
       p.rot = 0;
     }
-    const res = this.validate(p.defId, x, z, p.rot, 1);
+    const res = this.validate(p.defId, x, z, p.rot, p.level || 1, !!p.moving);
     p.x = x; p.z = z;
     p.y = res.y !== undefined ? res.y : g.world.heightAt(x, z);
     p.valid = res.ok;
@@ -431,6 +487,18 @@
   Building.prototype.confirm = function () {
     const p = this.placing;
     if (!p) return false;
+    if (p.moving) {
+      const chk = this.validate(p.defId, p.x, p.z, p.rot, p.level, true);
+      if (!chk.ok) { this.game.ui.toast('⚠️ ' + chk.why, 'bad'); this.game.audio.deny(); return false; }
+      const saved = p.moving;
+      p.moving = null;                 // cancel() must not put it back as well
+      this.cancel();
+      const b = this._restore(saved, p.x, p.z, p.rot);
+      this.game.audio.build();
+      this.game.ui.toast('✅ ' + saved.def.icon + ' ' + saved.def.name + ' جابه‌جا شد', 'good');
+      if (b) this.game.fx.hitBurst(b.x, b.y + 1, b.z, 0xffd15c, 18);
+      return true;
+    }
     const res = this.validate(p.defId, p.x, p.z, p.rot, 1);
     if (!res.ok) { this.game.ui.toast('⚠️ ' + res.why, 'bad'); return false; }
     if (!this.game.inv.pay(res.cost)) return false;
@@ -450,11 +518,12 @@
     return true;
   };
 
-  Building.prototype.place = function (defId, x, z, rot, level) {
+  Building.prototype.place = function (defId, x, z, rot, level, keepVariant) {
     const def = C.BUILDINGS[defId];
     const fp = footprint(def, rot);
     const y = this.game.world.footprint(x, z, fp.w, fp.d, 0).avg;
-    const variant = variantAt(x, z);
+    // a building that was picked up and moved keeps the look it had
+    const variant = keepVariant === undefined ? variantAt(x, z) : keepVariant;
     const obj = M.building(defId, level, undefined, variant);
     obj.position.set(x, y, z);
     obj.rotation.y = rot;
@@ -490,8 +559,50 @@
       this._reshapeWall(b);           // itself, by reference
       this.refreshWalls(x, z);        // then the four neighbours
     }
+    this.evictFrom(b);
     this.game.bus.emit('build', b);
     return b;
+  };
+
+  /* Step everyone standing where a new structure just landed out of it.
+     Building a table on your own feet used to trap you — and your horse —
+     inside it, so this runs the moment anything is placed. */
+  Building.prototype.evictFrom = function (b) {
+    const g = this.game;
+    const world = g.world;
+    const push = (e, forPlayer, pad) => {
+      const esc = this.escapeFrom(e.x, e.z, pad, forPlayer);
+      if (!esc) return false;
+      e.x = esc.x; e.z = esc.z;
+      return true;
+    };
+    if (g.player) {
+      const p = g.player.pos;
+      const esc = this.escapeFrom(p.x, p.z, 0.2, true);
+      if (esc) {
+        p.x = esc.x; p.z = esc.z;
+        p.y = Math.max(p.y, world.heightAt(p.x, p.z));
+        g.player.vel.set(0, 0, 0);
+      }
+    }
+    if (g.horses) {
+      for (const h of g.horses.list) {
+        if (h.stabled && h.home) continue;                 // its own box is fine
+        if (push(h, false, 0.4)) h.y = world.heightAt(h.x, h.z);
+      }
+    }
+    if (g.villagers) {
+      for (const v of g.villagers.list) {
+        if (push(v, true, 0.2)) { v.y = world.heightAt(v.x, v.z); v.think = 0; }
+      }
+    }
+    if (g.wildlife) {
+      for (const a of g.wildlife.animals) {
+        if (a.dead) continue;
+        if (push(a, false, 0.25)) a.y = world.heightAt(a.x, a.z);
+      }
+    }
+    void b;
   };
 
   Building.prototype.upgrade = function (b) {
@@ -843,11 +954,20 @@
      PERSISTENCE
      ========================================================= */
   Building.prototype.serialize = function () {
-    return this.list.map(function (b) {
-      return [b.defId, Math.round(b.x * 100) / 100, Math.round(b.z * 100) / 100, b.rot, b.level, Math.round(b.hp), Math.round(b.prodT * 10) / 10];
-    });
+    const row = (b) => [b.defId, Math.round(b.x * 100) / 100, Math.round(b.z * 100) / 100,
+      b.rot, b.level, Math.round(b.hp), Math.round(b.prodT * 10) / 10];
+    const out = this.list.map(row);
+    /* A building being carried is out of the world. Saving right then would
+       lose it for good, so it is written down where it was picked up. */
+    const mv = this.placing && this.placing.moving;
+    if (mv) {
+      out.push([mv.defId, Math.round(mv.fromX * 100) / 100, Math.round(mv.fromZ * 100) / 100,
+        mv.fromRot, mv.level, Math.round(mv.hp), Math.round((mv.prodT || 0) * 10) / 10]);
+    }
+    return out;
   };
   Building.prototype.deserialize = function (arr) {
+    if (this.placing) { this.placing.moving = null; this.cancel(); }
     while (this.list.length) this.demolish(this.list[0], false);
     if (!arr) return;
     for (const r of arr) {

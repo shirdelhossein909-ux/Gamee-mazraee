@@ -95,7 +95,7 @@
   item('grape', 'انگور', '🍇', 55, 'crop');
 
   // animal products
-  item('meat', 'گوشت', '🍖', 16, 'animal');
+  item('meat', 'گوشت', '🍖', 3, 'animal');      // a fifth of its old value: hunting paid too well
   item('hide', 'پوست خام', '🟫', 14, 'animal');
   item('leather', 'چرم', '👝', 32, 'craft');
   item('feather', 'پر', '🪶', 6, 'animal');
@@ -241,7 +241,20 @@
   /* ===================== BUILDINGS ===================== */
   /* cat: farm | home | prod | def | city  */
   const B = {};
-  function bld(o) { B[o.id] = o; return o; }
+  /* Everything you build costs three times what it used to — the council
+     table too. Wrapping cost() here keeps every definition below reading as
+     its own base price. */
+  C.BUILD_COST_MUL = 3;
+  function bld(o) {
+    const raw = o.cost;
+    o.cost = function (l) {
+      const c = raw(l), out = {};
+      for (const k in c) out[k] = Math.max(1, Math.round(c[k] * C.BUILD_COST_MUL));
+      return out;
+    };
+    B[o.id] = o;
+    return o;
+  }
   const scale = (base, lvl, f) => {
     const out = {}; const m = Math.pow(f || 1.8, lvl - 1);
     for (const k in base) out[k] = Math.max(1, Math.round(base[k] * m));
@@ -270,13 +283,13 @@
     id: 'silo', name: 'سیلو', icon: '🛢️', cat: 'farm', model: 'silo', size: [3, 3], max: 5, tier: 0, sk: 1,
     desc: 'ظرفیت نگهداری محصولات را افزایش می‌دهد.',
     cost: (l) => scale({ wood: 25, stone: 15 }, l),
-    effects: (l) => ({ storage: 60 * l })
+    effects: (l) => ({ storage: 180 * l })          // x3, and still linear per level
   });
   bld({
     id: 'warehouse', name: 'انبار بزرگ', icon: '🏚️', cat: 'city', model: 'shed', size: [5, 4], max: 5, tier: 1, sk: 3,
     desc: 'ظرفیت کل کوله‌پشتی و انبار را خیلی زیاد می‌کند.',
     cost: (l) => Object.assign(scale({ wood: 60, stone: 30, plank: 10 }, l), { coin: Math.round(120 * Math.pow(1.9, l - 1)) }),
-    effects: (l) => ({ storage: 150 * l })
+    effects: (l) => ({ storage: 750 * l })          // x5 — a real warehouse
   });
   bld({
     id: 'coop', name: 'مرغداری', icon: '🐔', cat: 'farm', model: 'coop', size: [3, 3], max: 5, tier: 0, sk: 1,

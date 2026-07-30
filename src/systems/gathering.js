@@ -233,7 +233,8 @@
         const b = t.building;
         return {
           name: b.def.icon + ' ' + b.def.name + ' — سطح ' + U.fa(b.level),
-          hint: b.defId === 'council' ? 'کلید E: تعیین وظیفهٔ اهالی' : 'کلید E: اطلاعات و ارتقا',
+          hint: (b.defId === 'council' ? 'کلید E: تعیین وظیفهٔ اهالی' : 'کلید E: اطلاعات و ارتقا') +
+            ' · کلید G: جابه‌جایی',
           hp: b.maxHp ? b.hp / b.maxHp : 1
         };
       }

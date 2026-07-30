@@ -15,6 +15,7 @@
     this.group = new THREE.Group();
     game.scene.add(this.group);
     this.spawnTimer = 2;
+    this.uid = 1;
     this.raidTimer = 0;
     this._pool = Object.create(null);
   }
@@ -95,7 +96,7 @@
     obj.position.set(x, y, z);
     this.group.add(obj);
     const a = {
-      type: type, def: def, obj: obj,
+      uid: this.uid++, type: type, def: def, obj: obj,
       x: x, y: y, z: z, yaw: Math.random() * 6.283,
       hp: def.hp, maxHp: def.hp,
       state: 'wander', timer: Math.random() * 3, phase: Math.random() * 6.283,

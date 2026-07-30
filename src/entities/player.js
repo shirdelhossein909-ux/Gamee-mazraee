@@ -7,6 +7,10 @@
 
   const U = G.Utils, C = G.Config, M = G.Meshes;
   const PC = C.PLAYER, W = C.WORLD;
+  /* swimming pose: nearly flat, head a touch above the tail */
+  const SWIM_TILT = -1.35;
+  const SWIM_MID = 0.85;      // the model's mid-body height
+  const SWIM_DEPTH = 0.12;    // how far the body rides under the surface
 
   function Player(game) {
     this.game = game;
@@ -285,15 +289,32 @@
     const sw = Math.sin(this.walkPhase * 2) * Math.min(1, spd / 5) * (running ? 1.15 : 0.85);
 
     if (this.swimming) {
-      // horizontal float: body tipped forward, alternating front crawl
-      o.rotation.x = -0.95;
-      o.position.y += 0.55;
+      /* Lie flat at the waterline, face down, front crawl.
+
+         The model pivots at the feet, so tipping it back swings the body
+         out behind the position — it has to be pushed forward by as much
+         as the tilt moved it, and set down at the surface. The old code
+         nudged o.position.y by a constant every frame *after* the lerp
+         above, which compounded: the body settled at offset/k, floating a
+         metre and a half too high and at a height that changed with the
+         frame rate. Everything here is derived from this.pos instead. */
+      const tilt = SWIM_TILT;
+      const c = Math.cos(tilt), s = Math.sin(tilt);
+      const fwd = -SWIM_MID * s;              // how far the tilt slid the body back
+      o.rotation.x = tilt;
+      o.position.set(
+        this.pos.x + Math.sin(this.yaw) * fwd,
+        W.waterLevel - SWIM_DEPTH - SWIM_MID * c,
+        this.pos.z + Math.cos(this.yaw) * fwd
+      );
       const s2 = Math.sin(this.walkPhase * 2.6);
-      ud.armL.rotation.x = -1.7 + s2 * 1.5;
-      ud.armR.rotation.x = -1.7 - s2 * 1.5;
-      ud.legL.rotation.x = s2 * 0.42;
-      ud.legR.rotation.x = -s2 * 0.42;
-      ud.torso.rotation.z = s2 * 0.1;
+      ud.armL.rotation.x = -1.6 + s2 * 1.5;
+      ud.armR.rotation.x = -1.6 - s2 * 1.5;
+      ud.legL.rotation.x = s2 * 0.36;
+      ud.legR.rotation.x = -s2 * 0.36;
+      ud.torso.rotation.x = 0;
+      ud.torso.rotation.z = s2 * 0.09;
+      ud.torso.position.y = 0.86;
       return;
     }
     o.rotation.x = 0;

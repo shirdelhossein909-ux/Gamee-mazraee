@@ -287,8 +287,8 @@
         break;
       }
       case 'hunt': {
-        const a = g.wildlife.nearest(v.x, v.z, 85, false);
-        if (a && !a.dead) {
+        const a = this._pickPrey(v);
+        if (a) {
           v.prey = a;
           v.hasTarget = true;
           v.tx = a.x; v.tz = a.z;
@@ -338,6 +338,31 @@
       if (skip && skip[n.id] > 0) continue;        // proved unreachable lately
       const d = U.dist2(v.x, v.z, n.x, n.z);
       if (d < bd) { bd = d; best = n; }
+    }
+    return best;
+  };
+
+  /* Hunters used to all take the nearest animal, so the whole party walked
+     shoulder to shoulder round the edge of town. Each one now claims its own
+     quarry — nobody else's — and is drawn to game further out, so they fan
+     away from the settlement instead of tripping over each other. */
+  Villagers.prototype._pickPrey = function (v) {
+    const g = this.game;
+    const home = this.center();
+    const taken = Object.create(null);
+    for (const o of this.list) {
+      if (o !== v && o.job === 'hunt' && o.prey && !o.prey.dead) taken[o.prey.uid] = 1;
+    }
+    let best = null, bs = -1;
+    for (const a of g.wildlife.animals) {
+      if (a.dead || a.def.hostile) continue;
+      if (taken[a.uid]) continue;                          // someone else's kill
+      const d = U.dist(v.x, v.z, a.x, a.z);
+      if (d > 95) continue;
+      const out = U.dist(a.x, a.z, home.x, home.z);         // distance from town
+      /* close enough to reach, far enough out to be worth the walk */
+      const score = Math.min(out, 70) * 0.9 - d;
+      if (score > bs) { bs = score; best = a; }
     }
     return best;
   };

@@ -822,12 +822,22 @@
   /* =========================================================
      BUILD BAR & FISHING
      ========================================================= */
-  UI.prototype.showBuildBar = function (def) {
+  UI.prototype.showBuildBar = function (def, moving) {
     this.el.buildbar.classList.remove('hidden');
-    this.el.bbTitle.textContent = def.icon + ' ' + def.name;
+    this.el.bbTitle.textContent = (moving ? '🔀 ' : '') + def.icon + ' ' + def.name +
+      (moving ? ' — جابه‌جایی' : '');
+    this._movingBar = !!moving;
   };
   UI.prototype.updateBuildBar = function (def, res) {
     const inv = this.game.inv;
+    /* nothing to pay when you are only shifting something you already own */
+    if (this._movingBar) {
+      $('bb-cost').innerHTML = '<span>رایگان — همان ساختمان است</span>';
+      const w = $('bb-warn');
+      if (res.ok) w.classList.add('hidden');
+      else { w.classList.remove('hidden'); w.textContent = res.why || 'مکان نامناسب'; }
+      return;
+    }
     const cost = def.cost(1);
     let html = '';
     for (const k in cost) {
@@ -1511,6 +1521,10 @@
     });
     if (b.hp < b.maxHp) mk('🔧 تعمیر', 'gold', function () {
       if (g.building.repair(b)) self.renderStructure();
+    });
+    mk('🔀 جابه‌جایی و چرخاندن', '', function () {
+      self.closePanel();
+      g.building.startMove(b);
     });
     mk('🗑️ تخریب (نصف منابع برمی‌گردد)', 'danger', function () {
       if (!confirm('این ساختمان تخریب شود؟')) return;
