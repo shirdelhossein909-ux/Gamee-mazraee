@@ -295,15 +295,19 @@
     const p = this.player;
     if (this.vehicles.mounted) this.vehicles.dismount();
     if (this.horses.mounted) this.horses.dismount();
-    p.hp = p.maxHp * 0.5;
-    p.energy = Math.max(20, p.energy);
+    /* You come back whole. Waking up on half health next to whatever just
+       killed you only ever meant dying twice. */
+    p.hp = p.maxHp;
+    p.stamina = p.maxStamina;
+    p.energy = Math.max(60, p.energy);
     const loss = Math.floor(this.inv.coins * 0.1);
     if (loss > 0) this.inv.addCoins(-loss);
     const home = this.building.list.length
       ? { x: this.building.centerX, z: this.building.centerZ }
       : { x: 0, z: 0 };
     p.reset(new THREE.Vector3(home.x, this.world.heightAt(home.x, home.z), home.z));
-    this.ui.toast('💀 از پا افتادی! به خانه برگشتی' + (loss ? ' و ' + U.fa(loss) + ' سکه از دست دادی' : ''), 'bad');
+    this.ui.toast('💀 از پا افتادی! با جان کامل به خانه برگشتی' +
+      (loss ? ' و ' + U.fa(loss) + ' سکه از دست دادی' : ''), 'bad');
   };
 
   /* =========================================================

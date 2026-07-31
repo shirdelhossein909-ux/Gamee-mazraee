@@ -680,10 +680,36 @@
 
   Building.prototype._recenter = function () {
     if (!this.list.length) { this.centerX = 0; this.centerZ = 0; return; }
-    let sx = 0, sz = 0;
-    for (const b of this.list) { sx += b.x; sz += b.z; }
-    this.centerX = sx / this.list.length;
-    this.centerZ = sz / this.list.length;
+    /* A plain average is not where your town is. One watchfire on a far
+       mountain, one dock across the lake, and the "centre" lands in empty
+       grass halfway between — which is where guards then patrol, where
+       raiders aim, and where you respawn. Trim the outliers instead: mean,
+       then re-mean over only what sits near that mean, twice. The result
+       settles on the built-up cluster and ignores the outposts. */
+    let cx = 0, cz = 0;
+    for (const b of this.list) { cx += b.x; cz += b.z; }
+    cx /= this.list.length; cz /= this.list.length;
+
+    for (let pass = 0; pass < 3; pass++) {
+      /* median distance from the current guess, so the cut-off adapts to
+         a hamlet and to a metropolis alike */
+      const d = [];
+      for (const b of this.list) d.push(U.dist(cx, cz, b.x, b.z));
+      d.sort(function (a, b) { return a - b; });
+      const med = d[d.length >> 1];
+      const cut = Math.max(28, med * 2.2);
+      let sx = 0, sz = 0, n = 0;
+      for (const b of this.list) {
+        if (U.dist(cx, cz, b.x, b.z) > cut) continue;
+        sx += b.x; sz += b.z; n++;
+      }
+      if (!n) break;
+      const nx = sx / n, nz = sz / n;
+      if (U.dist(cx, cz, nx, nz) < 0.05) { cx = nx; cz = nz; break; }
+      cx = nx; cz = nz;
+    }
+    this.centerX = cx;
+    this.centerZ = cz;
   };
 
   /* =========================================================

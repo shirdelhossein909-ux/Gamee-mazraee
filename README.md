@@ -247,7 +247,7 @@ python3 -m http.server 8000      # یا:  npx http-server -p 8000
 | ⛏️ سنگ‌کاری | سراغ رگه‌های معدن می‌رود: سنگ، زغال‌سنگ، سنگ‌آهن، طلا و جواهر |
 | 🏹 شکارچی | دنبال حیوانات می‌رود و از فاصلهٔ کمانی به آن‌ها تیر می‌زند؛ گوشت و پوست مال توست |
 | 🌾 کشاورز | محصولات رسیده را خودش برداشت می‌کند |
-| 🛡️ نگهبان | دور شهر گشت می‌زند و به حیوانات مهاجم تیر می‌اندازد |
+| 🛡️ نگهبان | **سراغ دردسر می‌رود** — هر مهاجمی نزدیک شهر یا هر بنایی که دارد جویده می‌شود، او را از آن سر شهر می‌کشاند |
 | 🎼 نوازنده | در بهترین جای شهر تار می‌زند؛ آهنگ بازی عوض می‌شود و همه سرحال می‌آیند |
 | 🚶 بی‌کار | آزادانه در شهر می‌گردد |
 
@@ -476,6 +476,70 @@ python3 -m http.server 8000      # یا:  npx http-server -p 8000
 * هیچ‌وقت دو بار در کمتر از **۸ روز** تکرار نمی‌شود
 
 ---
+
+### 🛡️ نگهبان‌ها — بازنویسی کامل
+نگهبان‌ها کار نمی‌کردند. سه علت جدا داشت و هر سه پیدا و درست شد:
+
+1. **مرکز شهر جابه‌جا می‌شد.** «مرکز» میانگین سادهٔ همهٔ ساختمان‌ها بود، پس **یک**
+   آتش دیده‌بانی روی قلهٔ سیمرغ مرکز را ۴۳ متر می‌کشید وسط علفزار خالی — و
+   نگهبان‌ها همان‌جا گشت می‌زدند. حالا مرکز با **حذف پرت‌ها** حساب می‌شود (میانگین،
+   بعد میانگین دوباره فقط روی آنچه نزدیک آن است، سه بار). اندازه‌گیری: با چهار
+   پاسگاه دوردست در چهار جهت، مرکز **صفر متر** تکان می‌خورد.
+2. **نگهبان نمی‌توانست دور خانه‌های خودش بچرخد.** به ردیف خانه‌ها می‌خورد،
+   یک قدم کج می‌رفت، فریم بعد دوباره مستقیم به هدف می‌زد، و تا ابد به دیوار
+   می‌کوبید. حالا وقتی قدم چند بار پشت‌سرهم شکست بخورد، **یک نقطهٔ دور زدن**
+   انتخاب می‌کند و چند ثانیه به *آن* می‌رود — و همان سمتی را که دفعهٔ قبل جواب داد
+   اول امتحان می‌کند، پس دیوار بلند را دنبال می‌کند به‌جای اینکه با آن کلنجار برود.
+   (این برای همهٔ کارگرها درست شد، نه فقط نگهبان‌ها.)
+3. **تیرها به تپه می‌خوردند.** نگهبان از ۳۰ متری روی زمین ناهموار تیر می‌انداخت و
+   **همهٔ** تیرها در سرازیری فرو می‌رفتند. حالا قبل از هر تیر **خط دید** چک می‌شود؛
+   اگر تپه‌ای وسط باشد تیر نمی‌اندازد و در عوض **نزدیک‌تر می‌رود**. اندازه‌گیری در
+   تست: قبل **۶۱ تیر، ۰ اصابت، ۰ کشته** — بعد **۱۰ تیر، ۳ اصابت، هر ۳ مهاجم کشته**.
+
+بعلاوه:
+
+* **نشانه‌روی درست شد:** به‌جای یک بالا-بردن ثابت که در سه متری بالا می‌زد و در سی
+  متری کوتاه می‌آمد، حالا **افت واقعی تیر در زمان پرواز** حساب و جبران می‌شود.
+* **تیر دیگر از داخل حیوان رد نمی‌شود.** تیر ۵۲ متر بر ثانیه می‌رود؛ در یک فریم
+  کُند (دقیقاً وقتی شبیخون بزرگ است) بیشتر از قطر گرگ جابه‌جا می‌شد و **از توی
+  حیوان می‌پرید**. حالا مسیر هر فریم به گام‌های نیم‌متری شکسته می‌شود. اندازه‌گیری:
+  در ۶۰، ۲۰ و ۱۰ فریم بر ثانیه، **۲۴ از ۲۴** تیر می‌نشیند.
+* **قدرت نگهبان‌ها ۳ برابر شد** (۱۲٫۸ ← ۳۸٫۴ آسیب هر تیر در سطح ۱).
+* برد دیدشان با **سطح آبادی** بزرگ می‌شود، و گشت‌شان هم دور مرز واقعی شهر است نه
+  یک دایرهٔ ثابت ۱۲ متری.
+
+### 🧱 دیوارها ۵ برابر، برج‌ها ۳ برابر
+
+| | سطح ۱ | سطح ۲ | سطح ۳ |
+|---|---|---|---|
+| 🪵 حصار چوبی | ۲۰۰ | ۴۰۰ | ۶۰۰ |
+| 🧱 دیوار سنگی | ۷۰۰ | ۱۴۰۰ | ۲۱۰۰ |
+| 🚪 دروازه | ۵۰۰ | ۱۰۰۰ | ۱۵۰۰ |
+
+قدرت دفاعی‌شان هم ۵ برابر شد. **برج نگهبانی** سه برابر شد در هر سه چیز: جان
+(۶۰۰ در سطح ۱ تا ۳۰۰۰ در سطح ۵)، آسیب (۳۳ تا ۹۳) و امتیاز دفاعی. یک حصار سادهٔ
+سطح ۱ حالا **۱۶ ضربهٔ گرگ** را تاب می‌آورد، نه سه تا.
+
+### 🌙 شب‌ها آرام‌تر شدند
+شب‌ها بی‌امان بود. هر دو سرچشمهٔ فشار **یک‌سوم** شد:
+
+* **احتمال شروع شبیخون** یک‌سوم (اندازه‌گیری: از ۳۰ گرگ، ۱۹ نفر شبیخون می‌زدند؛
+  حالا ۱۴ — و در نمونهٔ دیگری ۶)
+* **تعداد درنده‌هایی که شب زاده می‌شوند** یک‌سوم — سهم درنده‌ها در جدول تولد شبانه
+  از ۰٫۶۸ به **۰٫۳۶** رسید
+
+شب هنوز خطرناک است؛ ولی دیگر محاصره‌ای نیست که تمام نشود.
+
+### ❤️ جانت دو برابر شد
+* **۲۰۰ جان** به‌جای ۱۰۰، و هر سطح **+۲۸** به‌جای +۱۴ (سطح ۱۰: **۴۵۲**)
+* **وقتی می‌میری و برمی‌گردی، جان و توانت کاملاً پر است** — قبلاً با نصف جان کنار
+  همان چیزی که کشته بودت بیدار می‌شدی، که فقط یعنی دو بار مردن
+* هزینهٔ مرگ سر جایش است: ۱۰٪ سکه‌هایت
+
+### 🐎 دیگر قطار اسب دنبالت نمی‌آید
+اسب رام‌شده وقتی **پیاده‌ای** دنبالت می‌آید — همان‌طور که باید. ولی وقتی **سوار
+یکی هستی**، بقیه سر جایشان می‌چرند. قبلاً کل اسب‌هایی که تا آن روز رام کرده بودی
+پشت سرت راه می‌افتادند.
 
 ### ماهیگیری
 کنار هر آبی می‌توانی قلاب بیندازی. یک مینی‌گیم زمان‌بندی: وقتی نشانگر داخل ناحیهٔ سبز
@@ -753,6 +817,24 @@ buildings (a cheap labourer, or expensive specialists who arrive already skilled
 with `V`, and lead it into a stable — a real ten-stall hall, one horse per room — where
 tamed horses walk to their own stall and stand in it. Working villagers borrow them to
 reach distant jobs at twice the speed.
+
+**Latest round — defence:** guards were reported as not working, and it turned out to be
+three separate faults. The town "centre" was a plain average of every building, so one
+watchfire on a distant peak dragged it forty metres into empty grass and the guards
+patrolled *that*; it is now a trimmed mean that ignores outposts entirely. A villager
+could not walk around its own row of houses — it sidestepped, re-aimed straight at the
+goal, and ping-ponged against the wall forever; blocked walkers now commit to a detour
+waypoint and follow the wall instead of arguing with it. And guards fired from thirty
+metres across broken ground, putting every arrow into a hillside; they now check line of
+sight before loosing and close the distance when there isn't one. Measured: 61 arrows /
+0 hits / 0 kills before, 10 arrows / 3 hits / all three raiders dead after. Arrows also
+no longer tunnel through their target on a long frame (24 of 24 land at 60, 20 and 10
+fps), and aim compensates for the real drop over the flight instead of a flat nudge.
+Guards hit **three times** as hard, walls take **five times** the punishment and towers
+are **three times** stronger in health, damage and defence. Nights are a third as
+aggressive in both raid odds and predator spawns. Your health is doubled (200, +28 a
+level) and you respawn at full strength. And when you are riding, the rest of your
+horses stay where they are instead of forming a train behind you.
 
 **Mythology:** three legends, each with a different way in. **The Simorgh** answers a
 rite you have to plan for — climb the peak that has been pinned to your map since the

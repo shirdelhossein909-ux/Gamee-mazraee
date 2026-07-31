@@ -88,6 +88,9 @@
         let w = def.weight * (night ? def.night : 1);
         // predators stay scarce around a small settlement
         if (def.hostile) w *= U.clamp(0.18 + threat * 0.34, 0.18, 2.2);
+        /* and after dark there are a third as many of them as there were —
+           the night used to spawn predators faster than you could clear them */
+        if (def.hostile && night) w *= C.THREAT.nightMul;
         if (w <= 0) continue;
         opts.push([id, w]);
       }
@@ -171,9 +174,11 @@
       if (a.raid) { a.raid = false; a.raidTarget = null; }
     }
 
-    /* Night raid — only after dark, and only if the town is worth the trip */
+    /* Night raid — only after dark, and only if the town is worth the trip.
+       Cut to a third of what it was: a night should be a threat you brace
+       for, not a siege that never lets up. */
     if (!a.raid && !fire && (def.hostile || def.thief) && night && threat >= C.THREAT.raidMin &&
-      Math.random() < dt * 0.009 * threat) {
+      Math.random() < dt * 0.009 * threat * C.THREAT.nightMul) {
       const t = this.game.building ? this.game.building.raidTarget(a.x, a.z) : null;
       if (t && U.dist(a.x, a.z, t.x, t.z) < 130) { a.raid = true; a.raidTarget = t; a.state = 'raid'; }
     }
@@ -393,6 +398,26 @@
   };
 
   /* ===================== ARROWS ===================== */
+  /* Is there actually a shot here? An archer standing on a knoll firing at
+     something in the dip beyond the next rise puts every arrow into the
+     hillside — which is what made a line of guards look like they were
+     doing nothing while the barn came down. Sample the ground under the
+     chord; a shot aimed with lift arcs above it, so a clear chord is a
+     safe answer. */
+  Wildlife.prototype.lineOfSight = function (ox, oy, oz, tx, ty, tz) {
+    const world = this.game.world;
+    const d = Math.hypot(tx - ox, tz - oz);
+    if (d < 1.5) return true;
+    const steps = Math.max(3, Math.min(28, Math.ceil(d / 1.8)));
+    for (let i = 1; i < steps; i++) {
+      const t = i / steps;
+      const x = ox + (tx - ox) * t, z = oz + (tz - oz) * t;
+      const y = oy + (ty - oy) * t;
+      if (world.heightAt(x, z) > y + 0.3) return false;
+    }
+    return true;
+  };
+
   Wildlife.prototype.shoot = function (origin, dir, dmg, range) {
     const obj = M.arrow();
     obj.position.copy(origin);
@@ -405,6 +430,15 @@
     });
   };
 
+  /* An arrow covers 52 metres a second. On a 60fps frame that is 0.87m per
+     step — just inside a wolf's hit radius. On a long frame (which is
+     exactly what a big night raid produces) it is several metres, and the
+     arrow teleports clean through the animal. Every archer in the game
+     quietly stopped landing shots precisely when it mattered most.
+
+     So walk the flight in sub-steps no longer than the smallest thing worth
+     hitting, and test each one. */
+  const ARROW_STEP = 0.55;
   Wildlife.prototype._stepArrows = function (dt) {
     const world = this.game.world;
     for (let i = this.arrows.length - 1; i >= 0; i--) {
@@ -412,22 +446,30 @@
       ar.life -= dt;
       ar.vy -= 9 * dt;
       const p = ar.obj.position;
-      const nx = p.x + ar.vx * dt, ny = p.y + ar.vy * dt, nz = p.z + ar.vz * dt;
+      const span = Math.hypot(ar.vx, ar.vy, ar.vz) * dt;
+      const steps = Math.max(1, Math.min(24, Math.ceil(span / ARROW_STEP)));
+      const sdt = dt / steps;
 
-      // hit an animal?
-      let hitA = null;
-      for (const a of this.animals) {
-        if (a.dead) continue;
-        const r = hitR(a.def) + 0.05;
-        if (U.dist2(nx, nz, a.x, a.z) < r * r && Math.abs(ny - (a.y + hitY(a.def))) < r * 1.6) { hitA = a; break; }
+      let done = false;
+      for (let s = 0; s < steps && !done; s++) {
+        const nx = p.x + ar.vx * sdt, ny = p.y + ar.vy * sdt, nz = p.z + ar.vz * sdt;
+        let hitA = null;
+        for (const a of this.animals) {
+          if (a.dead) continue;
+          const r = hitR(a.def) + 0.05;
+          if (U.dist2(nx, nz, a.x, a.z) < r * r && Math.abs(ny - (a.y + hitY(a.def))) < r * 1.6) { hitA = a; break; }
+        }
+        if (hitA) {
+          this.hit(hitA, ar.dmg, p.x, p.z);
+          this._killArrow(i);
+          done = true; break;
+        }
+        if (ny <= world.heightAt(nx, nz)) { this._killArrow(i); done = true; break; }
+        p.set(nx, ny, nz);
       }
-      if (hitA) {
-        this.hit(hitA, ar.dmg, p.x, p.z);
-        this._killArrow(i); continue;
-      }
-      if (ny <= world.heightAt(nx, nz) || ar.life <= 0) { this._killArrow(i); continue; }
-      p.set(nx, ny, nz);
-      ar.obj.lookAt(nx + ar.vx, ny + ar.vy, nz + ar.vz);
+      if (done) continue;
+      if (ar.life <= 0) { this._killArrow(i); continue; }
+      ar.obj.lookAt(p.x + ar.vx, p.y + ar.vy, p.z + ar.vz);
     }
   };
 

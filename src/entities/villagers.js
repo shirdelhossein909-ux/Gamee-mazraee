@@ -88,6 +88,25 @@
         if (!v.working || !this._targetValid(v)) this._retarget(v);
       }
 
+      /* A guard's quarry moves, so hold station on it every frame rather
+         than on the spot where it used to be. With no threat in sight they
+         check back often — a raid should not have to wait out a five
+         second think tick before anyone reacts. */
+      if (v.job === 'guard') {
+        if (v.foe && !v.foe.dead) {
+          const fx = v.foe.x, fz = v.foe.z;
+          const fd = Math.hypot(fx - v.x, fz - v.z) || 1;
+          /* no clean shot a moment ago: get right on top of it instead */
+          const off = v.pressIn > 0 ? 2.2 : C.GUARD.standOff;
+          const back = Math.min(fd, off);
+          v.tx = fx - ((fx - v.x) / fd) * back;
+          v.tz = fz - ((fz - v.z) / fd) * back;
+          if (v.working && fd > C.GUARD.shootRange) v.working = false;   // give chase
+        } else {
+          v.think = Math.min(v.think, 1.4);
+        }
+      }
+
       /* a hunter's quarry walks away, so re-aim every frame and hold
          at bow range instead of walking into the animal */
       if (v.job === 'hunt' && v.prey && !v.prey.dead) {
@@ -99,7 +118,14 @@
         if (v.working && pd > HUNT_RANGE + 3) v.working = false;   // give chase again
       }
 
-      const dx = v.tx - v.x, dz = v.tz - v.z;
+      /* head for the detour waypoint while one is live, otherwise the goal */
+      let goalX = v.tx, goalZ = v.tz;
+      if (v.detour) {
+        v.detour.t -= dt;
+        if (v.detour.t <= 0 || U.dist(v.x, v.z, v.detour.x, v.detour.z) < 1.6) v.detour = null;
+        else { goalX = v.detour.x; goalZ = v.detour.z; }
+      }
+      const dx = goalX - v.x, dz = goalZ - v.z;
       const d = Math.hypot(dx, dz);
       let moving = false;
 
@@ -114,6 +140,10 @@
         const step = v.speed * v.mul * dt;
         if (this._tryStep(v, dx / d, dz / d, step, world)) {
           moving = true;
+          v.stuckT = 0;
+        } else if (!v.detour && (v.stuckT = (v.stuckT || 0) + dt) > 0.4 &&
+          this._detour(v, dx / d, dz / d, world)) {
+          /* boxed in against something long — go round it */
           v.stuckT = 0;
         } else {
           /* Boxed in. Sidestepping handles a rock or a wall in the way, but a
@@ -210,6 +240,40 @@
     return false;
   };
 
+  /* Sidestepping gets you past a rock. It does not get you past your own
+     row of houses: the step turns aside, the next frame re-aims straight at
+     the goal, and the villager ping-pongs against the wall forever. That is
+     what made guards look broken — they could see the raid on the far side
+     of town and simply could not walk there.
+
+     So when a step keeps failing, commit to a waypoint off to one side and
+     walk to *that* for a few seconds before resuming. Whichever way worked
+     last time is tried first, so a long wall gets followed rather than
+     argued with. */
+  Villagers.prototype._detour = function (v, dirX, dirZ, world) {
+    const g = this.game;
+    const open = (x, z) => world.heightAt(x, z) > C.WORLD.waterLevel + 0.2 &&
+      !(g.building && g.building.blocks(x, z, true));
+    const px = -dirZ, pz = dirX;                    // perpendicular to the blockage
+    const first = v.detourSide || 1;
+    for (const dist of [7, 12, 18, 26]) {
+      for (const side of [first, -first]) {
+        const x = v.x + px * side * dist + dirX * 2;
+        const z = v.z + pz * side * dist + dirZ * 2;
+        if (!open(x, z)) continue;
+        let clear = true;
+        for (let t = 0.15; t <= 1.001; t += 0.15) {
+          if (!open(v.x + (x - v.x) * t, v.z + (z - v.z) * t)) { clear = false; break; }
+        }
+        if (!clear) continue;
+        v.detour = { x: x, z: z, t: 6 };
+        v.detourSide = side;
+        return true;
+      }
+    }
+    return false;
+  };
+
   /** write off the current target and go find another */
   Villagers.prototype._giveUp = function (v) {
     if (!v.skip) v.skip = Object.create(null);
@@ -273,6 +337,8 @@
       case 'stone': return !!(v.node && g.world.nodes.has(v.node.id));
       case 'hunt': return !!(v.prey && !v.prey.dead);
       case 'farm': return !!(v.plot && v.plot.crop && v.plot.stage >= 3);
+      /* a guard sticks with the thing they were sent after, until it falls */
+      case 'guard': return !!(v.foe && !v.foe.dead && this.game.wildlife.animals.indexOf(v.foe) >= 0);
       /* a player stays put: as long as there is somewhere to play, the
          gig continues and they are not sent looking for new work */
       case 'music': return !!this.stage();
@@ -322,9 +388,24 @@
         break;
       }
       case 'guard': {
-        // patrol the edge of town
+        /* Trouble first. A guard who keeps walking a pretty circle while
+           a wolf eats the barn is the whole reason guards looked broken. */
+        const foe = this._threatNear(v);
+        if (foe) {
+          v.foe = foe.animal || null;
+          v.hasTarget = true;
+          const sx = foe.x - v.x, sz = foe.z - v.z;
+          const d = Math.hypot(sx, sz) || 1;
+          const back = Math.min(d, C.GUARD.standOff);
+          v.tx = foe.x - (sx / d) * back;
+          v.tz = foe.z - (sz / d) * back;
+          return;
+        }
+        v.foe = null;
+        // nothing doing: walk the perimeter, sized to the settlement
+        const border = this._border();
         const ang = Math.random() * 6.283;
-        const r = 12 + Math.random() * 14;
+        const r = border * (C.GUARD.patrolMin + Math.random() * (C.GUARD.patrolMax - C.GUARD.patrolMin));
         v.tx = home.x + Math.cos(ang) * r;
         v.tz = home.z + Math.sin(ang) * r;
         return;
@@ -559,6 +640,32 @@
     }
   };
 
+  /* ===================== ARCHERY =====================
+     A bow is not a rifle. The old aim added a flat nudge to the vertical,
+     which overshoots at three metres and falls short at thirty. Work out
+     how long the arrow is in the air and lift by exactly the drop that
+     buys — the same maths for a guard, a hunter or a tower. */
+  const ARROW_SPEED = 52, ARROW_G = 9;
+  Villagers.prototype._aim = function (v, a) {
+    const eye = v.y + 1.35;
+    const dx = a.x - v.x, dz = a.z - v.z;
+    const dy = (a.y + a.def.size * 0.6) - eye;
+    const dist = Math.hypot(dx, dy, dz) || 1;
+    const t = dist / ARROW_SPEED;
+    const ly = dy + 0.5 * ARROW_G * t * t;
+    const nl = Math.hypot(dx, ly, dz) || 1;
+    return {
+      x: dx / nl, y: ly / nl, z: dz / nl,
+      eye: eye, flat: Math.hypot(dx, dz), dist: dist,
+      ty: a.y + a.def.size * 0.6
+    };
+  };
+
+  /** can this archer actually land one on that? */
+  Villagers.prototype._canShoot = function (v, a, aim) {
+    return this.game.wildlife.lineOfSight(v.x, aim.eye, v.z, a.x, aim.ty, a.z);
+  };
+
   /* ===================== HUNTERS ===================== */
   Villagers.prototype._hunt = function (v, dt) {
     const g = this.game;
@@ -572,38 +679,93 @@
     /* Village hunters draw a good deal slower than they used to — meat was
        arriving faster than anything else in the game. An expert still nocks
        arrows quicker than a plain hand. */
+    const aim = this._aim(v, a);
+    /* a hill in the way means walking round it, not emptying the quiver
+       into the slope */
+    if (!this._canShoot(v, a, aim)) { v.working = false; return; }
     v.shootCd = 2.2 * C.HUNTER_SLOW / (v.expert ? C.EXPERT.tickMul : 1);
     v.swingAnim = 1;
-    const dy = (a.y + a.def.size * 0.5) - (v.y + 1.3);
-    const l = Math.hypot(dx, dy, dz) || 1;
     g.wildlife.shoot(
-      new THREE.Vector3(v.x, v.y + 1.35, v.z),
-      new THREE.Vector3(dx / l, dy / l + 0.04, dz / l),
+      new THREE.Vector3(v.x, aim.eye, v.z),
+      new THREE.Vector3(aim.x, aim.y, aim.z),
       14 + g.progress.level * 0.9, 30
     );
     g.audio.bow();
   };
 
-  /* ===================== GUARDS ===================== */
+  /* ===================== GUARDS =====================
+     How far out a guard cares. Scales with the settlement, so a camp is
+     watched to its fence and a metropolis to its outskirts. */
+  Villagers.prototype._border = function () {
+    const t = this.game.progress ? this.game.progress.tier : 0;
+    return (C.TIERS[t] ? C.TIERS[t].border : 34);
+  };
+
+  /* Anything worth walking across town for: a predator inside the watch
+     circle, or — more urgently — whatever is currently chewing on one of
+     your buildings, wherever that is. */
+  Villagers.prototype._threatNear = function (v) {
+    const g = this.game;
+    if (!g.wildlife) return null;
+    const home = this.center();
+    const watch = Math.max(C.GUARD.watchMin, this._border() * C.GUARD.watch);
+    let best = null, bs = 1e9;
+    for (const a of g.wildlife.animals) {
+      if (a.dead) continue;
+      const raiding = a.raid && a.raidTarget;
+      if (!raiding && !a.def.hostile && !a.angry) continue;
+      /* is it near the town at all? a wolf two valleys over is not our
+         problem — but one at the wall is, and a raider always is */
+      const dHome = U.dist(a.x, a.z, home.x, home.z);
+      if (!raiding && dHome > watch) continue;
+      /* score: raiders first, then whoever is closest to this guard */
+      const s = U.dist(a.x, a.z, v.x, v.z) * (raiding ? 0.4 : 1);
+      if (s < bs) { bs = s; best = a; }
+    }
+    return best ? { animal: best, x: best.x, z: best.z } : null;
+  };
+
   Villagers.prototype._guard = function (v, dt) {
     const g = this.game;
-    v.shootCd = (v.shootCd || 0) - dt;
-    if (v.shootCd > 0) return;
-    const a = g.wildlife.nearest(v.x, v.z, 26, true);
+    v.shootCd = Math.max(-1, (v.shootCd || 0) - dt);
+    /* Re-aim at whatever we came for; if it died or wandered off, ask for
+       a new assignment on the next think instead of standing about. */
+    if (v.foe && (v.foe.dead || g.wildlife.animals.indexOf(v.foe) < 0)) {
+      v.foe = null;
+      v.think = Math.min(v.think, 0.25);
+      v.hasTarget = false;
+    }
+    const a = v.foe && !v.foe.dead
+      ? v.foe
+      : g.wildlife.nearest(v.x, v.z, C.GUARD.shootRange, true);
     if (!a) return;
-    v.shootCd = 1.5;
-    v.swingAnim = 1;
+    /* face the threat even between arrows — a guard staring the wrong way
+       while something closes in looks exactly like a guard doing nothing */
     const dx = a.x - v.x, dz = a.z - v.z;
-    const dy = (a.y + a.def.size * 0.6) - (v.y + 1.3);
-    const l = Math.hypot(dx, dy, dz) || 1;
-    const dmg = 12 + g.progress.level * 0.8;
+    v.yaw += U.angleDelta(v.yaw, Math.atan2(dx, dz)) * Math.min(1, dt * 8);
+    const flat = Math.hypot(dx, dz);
+    v.pressIn = Math.max(0, (v.pressIn || 0) - dt);
+    if (flat > C.GUARD.shootRange) return;      // still closing in
+    if (v.shootCd > 0) return;
+    const aim = this._aim(v, a);
+    if (!this._canShoot(v, a, aim)) {
+      /* ground in the way. Close on it rather than filling the hillside
+         with arrows — this, more than anything, is what made a line of
+         guards look like it was ignoring a raid. */
+      v.pressIn = 1.5;
+      v.working = false;
+      return;
+    }
+    v.shootCd = C.GUARD.shootCd;
+    v.swingAnim = 1;
+    /* three times the arrow a town guard used to loose */
+    const dmg = (C.GUARD.baseDamage + g.progress.level * C.GUARD.perLevel) * C.GUARD.damage;
     g.wildlife.shoot(
-      new THREE.Vector3(v.x, v.y + 1.35, v.z),
-      new THREE.Vector3(dx / l, dy / l + 0.05, dz / l),
-      dmg, 30
+      new THREE.Vector3(v.x, aim.eye, v.z),
+      new THREE.Vector3(aim.x, aim.y, aim.z),
+      dmg, C.GUARD.shootRange + 6
     );
     g.audio.bow();
-    v.yaw = Math.atan2(dx, dz);
   };
 
   /* ===================== SPAWN / DESPAWN ===================== */

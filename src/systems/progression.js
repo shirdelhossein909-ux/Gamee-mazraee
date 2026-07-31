@@ -39,9 +39,9 @@
       this.xp -= need;
       this.level++;
       const p = this.game.player;
-      p.maxHp = C.PLAYER.hp + (this.level - 1) * 14;
+      p.maxHp = C.PLAYER.hp + (this.level - 1) * C.PLAYER.hpPerLevel;
       p.hp = p.maxHp;
-      p.maxStamina = C.PLAYER.stamina + (this.level - 1) * 7;
+      p.maxStamina = C.PLAYER.stamina + (this.level - 1) * C.PLAYER.staminaPerLevel;
       p.stamina = p.maxStamina;
       this.game.audio.levelUp();
       this.game.ui.levelUp('سطح ' + U.fa(this.level) + '!');
@@ -251,8 +251,8 @@
     this.foodMood = d.foodMood || 0;
     const p = this.game.player;
     if (p) {
-      p.maxHp = C.PLAYER.hp + (this.level - 1) * 14;
-      p.maxStamina = C.PLAYER.stamina + (this.level - 1) * 7;
+      p.maxHp = C.PLAYER.hp + (this.level - 1) * C.PLAYER.hpPerLevel;
+      p.maxStamina = C.PLAYER.stamina + (this.level - 1) * C.PLAYER.staminaPerLevel;
       p.hp = Math.min(p.hp, p.maxHp);
     }
     this.recalc();

@@ -431,29 +431,35 @@
     cost: (l) => scale({ wood: 30, plank: 6 }, l),
     effects: (l) => ({ fishing: l, happy: 1 }), water: true
   });
+  /* Defences got a serious pass: walls stand five times the punishment they
+     used to, and towers hit three times as hard. A wall you built at some
+     cost should hold a night, not fold to the first wolf. */
+  C.WALL_MUL = 5;
+  C.TOWER_MUL = 3;
   bld({
     id: 'fence', name: 'حصار چوبی', icon: '🪵', cat: 'def', model: 'fence', size: [2, 2], connects: true, max: 3, tier: 0, sk: 0,
     desc: 'جلوی حیوانات وحشی را می‌گیرد. ارزان و سریع — قطعه‌ها خودکار به هم می‌چسبند.',
     cost: (l) => scale({ wood: 4 }, l, 2.2),
-    effects: (l) => ({ defense: l, block: true }), hp: (l) => 40 * l
+    effects: (l) => ({ defense: l * C.WALL_MUL, block: true }), hp: (l) => 40 * l * C.WALL_MUL
   });
   bld({
     id: 'stone_wall', name: 'دیوار سنگی', icon: '🧱', cat: 'def', model: 'wall', size: [2, 2], connects: true, max: 3, tier: 1, sk: 2,
     desc: 'دیوار محکم؛ خودکار به دیوارهای کناری وصل می‌شود و گوشه می‌سازد.',
     cost: (l) => scale({ stone: 8, brick: 2 }, l, 2.2),
-    effects: (l) => ({ defense: 2 * l, block: true }), hp: (l) => 140 * l
+    effects: (l) => ({ defense: 2 * l * C.WALL_MUL, block: true }), hp: (l) => 140 * l * C.WALL_MUL
   });
   bld({
     id: 'gate', name: 'دروازه', icon: '🚪', cat: 'def', model: 'gate', size: [2, 2], connects: true, max: 3, tier: 1, sk: 2,
     desc: 'از آن رد می‌شوی ولی حیوانات نه.',
     cost: (l) => scale({ wood: 12, iron: 2 }, l),
-    effects: (l) => ({ defense: l, block: true, passable: true }), hp: (l) => 100 * l
+    effects: (l) => ({ defense: l * C.WALL_MUL, block: true, passable: true }), hp: (l) => 100 * l * C.WALL_MUL
   });
   bld({
     id: 'guard_tower', name: 'برج نگهبانی', icon: '🗼', cat: 'def', model: 'tower', size: [3, 3], max: 5, tier: 1, sk: 3,
     desc: 'به حیوانات مهاجم نزدیک تیر می‌زند. برد و آسیبش با سطح زیاد می‌شود.',
     cost: (l) => Object.assign(scale({ wood: 40, stone: 30, iron: 4 }, l), { coin: Math.round(120 * Math.pow(1.9, l - 1)) }),
-    effects: (l) => ({ defense: 4 * l, range: 16 + l * 4, dps: 6 + l * 5 }), hp: (l) => 200 * l
+    effects: (l) => ({ defense: 4 * l * C.TOWER_MUL, range: 16 + l * 4, dps: (6 + l * 5) * C.TOWER_MUL }),
+    hp: (l) => 200 * l * C.TOWER_MUL
   });
   C.BUILDINGS = B;
 
@@ -739,7 +745,11 @@
     perLevel: 1.1,
     divisor: 34,
     max: 6,
-    raidMin: 0.4          // below this, nothing ever raids the town
+    raidMin: 0.4,         // below this, nothing ever raids the town
+    /* Nights were relentless. Both the odds of a raid starting and how many
+       predators the dark spawns are cut to a third, so a night is a threat
+       you brace for rather than a siege you never get out from under. */
+    nightMul: 1 / 3
   };
 
   C.FISH = [
@@ -850,6 +860,26 @@
   /* How much slower a village hunter shoots than they used to. Your own
      hunting is untouched — it was already well judged. */
   C.HUNTER_SLOW = 3;
+
+  /* ===================== GUARDS =====================
+     A guard used to wander a random circle round the town and shoot only
+     what happened to walk past. Now they go to the trouble: anything
+     hostile near the settlement, or any building being chewed on, pulls
+     them across town. And they hit three times as hard as they did. */
+  C.GUARD = {
+    damage: 3,            // multiplier on a guard's arrow
+    baseDamage: 12,       // before the multiplier
+    perLevel: 0.8,        // your own level makes the militia better armed
+    shootCd: 1.5,         // seconds between arrows
+    shootRange: 30,       // how far a guard will loose an arrow
+    /* how far from the town centre a guard will go looking for trouble —
+       scaled by the settlement's border so a city is properly patrolled */
+    watch: 1.6,
+    watchMin: 55,
+    standOff: 8,          // hold this far from the quarry and shoot
+    patrolMin: 0.45,      // patrol ring, as a share of the border
+    patrolMax: 0.95
+  };
   /* Market multipliers on an item's base value. Buying costs more than it
      did and more than selling returns, so coins have to be earned. */
   C.PRICE = { sell: 1.6, buy: 3.4 };
@@ -992,7 +1022,10 @@
 
   C.PLAYER = {
     speed: 6.2, runMul: 1.75, jump: 8.4, gravity: 24,
-    hp: 100, energy: 100, stamina: 100,
+    /* twice the constitution you used to have, and it keeps doubling as
+       you level — a bear should be frightening, not instantly fatal */
+    hp: 200, hpPerLevel: 28,
+    energy: 100, stamina: 100, staminaPerLevel: 7,
     reach: 5.5, height: 1.8,
     keyLook: 2.1                  // radians/sec of camera turn from the arrow keys
   };

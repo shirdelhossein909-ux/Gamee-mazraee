@@ -360,8 +360,11 @@
     if (!h.tame && pd < H.spookRange && h.spook <= 0) {
       // shies away when crowded, but only a couple of steps
       wantX = h.x - p.x; wantZ = h.z - p.z; speed = 4.2;
-    } else if (h.tame && !h.stabled && pd > 6 && pd < 70) {
-      // a tamed horse trails after you
+    } else if (h.tame && !h.stabled && !this.mounted && pd > 6 && pd < 70) {
+      /* A tamed horse trails after you — but only when you are on foot.
+         Once you are in a saddle the rest of the string used to come
+         jogging along behind, which is not what a herd does and made a
+         nuisance of every horse you had ever tamed. */
       wantX = p.x - h.x; wantZ = p.z - h.z;
       speed = Math.min(9, 2.6 + pd * 0.22);
     } else if (h.tame && h.stabled && h.home) {
