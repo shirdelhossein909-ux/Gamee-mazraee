@@ -229,7 +229,16 @@
     const s = C.SEASONS[t.season];
     e.season.textContent = s.icon + ' ' + s.name;
     const w = C.WEATHER[g.sky.weather];
-    e.weather.textContent = w.icon + ' ' + w.name;
+    /* the moon shares the weather slot: at night what phase it is matters
+       more than whether it is cloudy, and the Simorgh's rite needs it */
+    const moon = g.sky.moonPhase();
+    if (g.sky.isNight()) {
+      e.weather.textContent = moon.icon + ' ' + moon.name;
+      e.weather.className = moon.full ? 'moon-full' : '';
+    } else {
+      e.weather.textContent = w.icon + ' ' + w.name;
+      e.weather.className = '';
+    }
     const tier = C.TIERS[prog.tier];
     e.tier.textContent = tier.icon + ' ' + tier.name;
     e.pop.textContent = U.fa(prog.population) + (g.settlers ? '/' + U.fa(g.settlers.housing()) : '');
@@ -276,11 +285,18 @@
   UI.prototype._taming = function () {
     const box = $('taming');
     if (!box) return;
-    const t = this.game.horses && this.game.horses.taming;
-    if (!t) { if (!box.classList.contains('hidden')) box.classList.add('hidden'); return; }
+    const g = this.game;
+    const h = g.horses && g.horses.taming;
+    const c = !h && g.companions ? g.companions.taming : null;
+    if (!h && !c) { if (!box.classList.contains('hidden')) box.classList.add('hidden'); return; }
     box.classList.remove('hidden');
-    $('tm-title').textContent = 'رام کردن «' + t.horse.name + '»';
-    $('tm-fill').style.width = U.clamp01(t.t / C.HORSE.tameTime) * 100 + '%';
+    if (h) {
+      $('tm-title').textContent = '🐎 رام کردن «' + h.horse.name + '»';
+      $('tm-fill').style.width = U.clamp01(h.t / C.HORSE.tameTime) * 100 + '%';
+    } else {
+      $('tm-title').textContent = c.pet.def.icon + ' رام کردن ' + c.pet.def.name;
+      $('tm-fill').style.width = U.clamp01(c.t / c.pet.def.tameTime) * 100 + '%';
+    }
   };
 
   UI.prototype._quest = function () {
@@ -303,6 +319,18 @@
     const t = g.gather.target;
     const info = g.gather.describe(t);
     const showable = info && t && !(t.kind === 'ground');
+    /* Standing on the peak, or on the spot from a dream, outranks whatever
+       the crosshair happens to be pointing at — it is why you walked here. */
+    const myth = g.myth ? g.myth.hint() : null;
+    if (myth && !g.building.placing) {
+      this.el.ti.classList.remove('hidden');
+      this.el.cross.classList.add('active');
+      this.el.tiName.textContent = myth.icon + ' ' + myth.text.split('—')[0].trim();
+      this.el.tiHint.textContent = myth.text.indexOf('—') >= 0
+        ? myth.text.slice(myth.text.indexOf('—') + 1).trim() : myth.text;
+      this.el.tiBar.parentElement.style.display = 'none';
+      return;
+    }
     if (!showable || g.building.placing) {
       this.el.ti.classList.add('hidden');
       this.el.cross.classList.remove('active');
@@ -321,6 +349,20 @@
   /* =========================================================
      MINIMAP
      ========================================================= */
+  /* Places on the map that came from a legend rather than from you. The
+     peak is pinned from the first minute — it is meant to be a question
+     you carry around long before you can answer it. */
+  UI.prototype.mythPins = function () {
+    const m = this.game.myth;
+    const out = [];
+    if (!m) return out;
+    if (m.peak) out.push({ x: m.peak.x, z: m.peak.z, icon: '🪶', name: 'قلهٔ سیمرغ' });
+    if (m.treasure) out.push({ x: m.treasure.x, z: m.treasure.z, icon: '🌙', name: 'جای رؤیا' });
+    if (m.divState === 'omen' && m.divCave) out.push({ x: m.divCave.x, z: m.divCave.z, icon: '👹', name: 'غار دیو' });
+    if (m.divState === 'active' && m.div && !m.div.dead) out.push({ x: m.div.x, z: m.div.z, icon: '👹', name: 'دیو سپید' });
+    return out;
+  };
+
   UI.prototype.drawMinimap = function () {
     const g = this.game, ctx = this.mmCtx;
     const size = this.el.mm.width;
@@ -401,6 +443,20 @@
       ctx.arc(ex, ez, inside ? 3.5 : 3, 0, 6.283);
       ctx.fill(); ctx.stroke();
     }
+    // the three legends: the peak, a dream and the Div's cave
+    for (const l of this.mythPins()) {
+      const x = toX(l.x), z = toZ(l.z);
+      const inside = x >= 5 && z >= 5 && x <= size - 5 && z <= size - 5;
+      const dx = x - size / 2, dz = z - size / 2;
+      const len = Math.hypot(dx, dz) || 1;
+      const ex = inside ? x : size / 2 + (dx / len) * (size / 2 - 9);
+      const ez = inside ? z : size / 2 + (dz / len) * (size / 2 - 9);
+      ctx.font = (inside ? 13 : 11) + 'px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(l.icon, ex, ez);
+    }
+    ctx.textBaseline = 'alphabetic';
 
     // player arrow
     ctx.save();
@@ -732,6 +788,24 @@
       ctx.textAlign = 'start';
     }
 
+    /* legends: the Simorgh's peak, tonight's dream, the Div */
+    for (const l of this.mythPins()) {
+      const x = toX(l.x), z = toZ(l.z);
+      if (x < -40 || z < -40 || x > W + 40 || z > H + 40) continue;
+      ctx.font = '22px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(l.icon, x, z);
+      ctx.font = 'bold 11px sans-serif';
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = 'rgba(0,0,0,.75)';
+      ctx.strokeText(l.name, x, z + 18);
+      ctx.fillStyle = '#ffe7a8';
+      ctx.fillText(l.name, x, z + 18);
+      ctx.textBaseline = 'alphabetic';
+      ctx.textAlign = 'start';
+    }
+
     /* the player */
     const px = toX(g.player.pos.x), pz = toZ(g.player.pos.z);
     ctx.save();
@@ -890,6 +964,7 @@
       case 'quests': this.renderQuests(); break;
       case 'people': this.renderPeople(); break;
       case 'jobs': this.renderJobs(); break;
+      case 'chronicle': this.renderChronicle(); break;
       case 'structure': this.renderStructure(); break;
     }
     if (this.game.audio) this.game.audio.click();
@@ -935,8 +1010,11 @@
     if (!id || !g.inv.count(id)) { box.innerHTML = 'یک آیتم را انتخاب کن'; return; }
     const it = C.ITEMS[id];
     const price = g.economy.sellPrice(id);
+    const priceless = it.value <= 0;
     let html = '<b>' + it.icon + ' ' + it.name + '</b> × ' + U.fa(g.inv.count(id)) +
-      '<br>' + (it.desc || '') + '<br>ارزش فروش: 💰 ' + U.fa(price) + ' هر واحد';
+      '<br>' + (it.desc || '') +
+      (priceless ? '<br><span style="color:var(--gold)">قیمت ندارد — فروختنی نیست</span>'
+        : '<br>ارزش فروش: 💰 ' + U.fa(price) + ' هر واحد');
     html += '<div class="row" id="inv-actions"></div>';
     box.innerHTML = html;
     const act = $('inv-actions');
@@ -947,14 +1025,27 @@
       b.onclick = fn;
       act.appendChild(b);
     };
-    mk('فروش ۱', 'gold', function () { g.economy.sell(id, 1); self.renderInventory(); });
-    mk('فروش همه', 'gold', function () { g.economy.sell(id, g.inv.count(id)); self.invSel = null; self.renderInventory(); });
+    if (!priceless) {
+      mk('فروش ۱', 'gold', function () { g.economy.sell(id, 1); self.renderInventory(); });
+      mk('فروش همه', 'gold', function () { g.economy.sell(id, g.inv.count(id)); self.invSel = null; self.renderInventory(); });
+    }
     if (C.FOOD[id]) mk('خوردن', 'primary', function () {
       g.inv.selectedFood = id; g.gather.eat(); self.renderInventory(); self.dirtyHot = true;
     });
     if (it.cat === 'seed') mk('انتخاب برای کاشت', 'primary', function () {
       g.inv.selectedSeed = id; self.dirtyHot = true; self.toast('🌱 ' + it.name + ' انتخاب شد', 'good');
     });
+    /* the two things you cannot sell, because they are not for selling */
+    if (id === 'simorgh_feather') {
+      mk('🔥 سوزاندن در شهر', 'primary', function () {
+        if (g.myth.burnFeather()) { self.invSel = null; self.renderInventory(); }
+      });
+    }
+    if (id === 'div_heart') {
+      mk('🖤 فشردن دل دیو', 'primary', function () {
+        if (g.myth.useHeart()) { self.invSel = null; self.renderInventory(); }
+      });
+    }
   };
 
   /* ---------------- build ---------------- */
@@ -1450,6 +1541,54 @@
   };
 
   /* ---------------- structure ---------------- */
+  /* ---------------- chronicle ---------------- */
+  UI.prototype.renderChronicle = function () {
+    const g = this.game, ch = g.chronicle;
+    this.chronicleNew = false;
+    const head = $('chron-head');
+    const list = $('chron-list');
+    if (!head || !list) return;
+
+    const st = ch.stamp();
+    const days = st.day;
+    head.innerHTML =
+      'تاریخ کِشتوَر، از روز نخست تا امروز — <b>' + ch.dateText(st) + '</b>.<br>' +
+      'در این <b>' + U.fa(days) + '</b> روز، <b>' + U.fa(ch.entries.length) + '</b> رویداد ثبت شده است. ' +
+      'هرچه در شهرت بگذرد خودش اینجا نوشته می‌شود.';
+
+    list.innerHTML = '';
+    if (!ch.entries.length) {
+      list.innerHTML = '<div class="chron-empty">هنوز چیزی برای گفتن نیست. برو و کاری بکن.</div>';
+      return;
+    }
+    /* newest first: the last thing that happened is the thing you came for */
+    for (let i = ch.entries.length - 1; i >= 0; i--) {
+      const e = ch.entries[i];
+      const d = document.createElement('div');
+      d.className = 'chron ' + (e.kind || 'plain');
+      d.innerHTML = '<div class="ci">' + e.icon + '</div><div class="cb">' +
+        '<div class="cd">' + ch.dateText(e) + '</div>' +
+        '<div class="ct">' + e.text + '</div></div>';
+      list.appendChild(d);
+    }
+  };
+
+  /* A dream is not a toast: it takes the screen for a moment, then lets go. */
+  UI.prototype.dreamFlash = function (title, text) {
+    const box = $('dream');
+    if (!box) return;
+    $('dream-title').textContent = title;
+    $('dream-text').textContent = text;
+    box.classList.remove('hidden', 'fade');
+    void box.offsetWidth;                    // restart the animation
+    clearTimeout(this._dreamT);
+    const self = this;
+    this._dreamT = setTimeout(function () {
+      box.classList.add('fade');
+      self._dreamT = setTimeout(function () { box.classList.add('hidden'); }, 900);
+    }, 6200);
+  };
+
   UI.prototype.openStructure = function (b) {
     this.structure = b;
     this.openPanel('structure');

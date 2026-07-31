@@ -36,6 +36,14 @@
   /** returns the amount actually stored (0 when full) */
   Inventory.prototype.add = function (id, n, silent) {
     if (!C.ITEMS[id] || n <= 0) return 0;
+    /* A relic weighs nothing and cannot be replaced. Losing the Simorgh's
+       feather — twelve days in the making — because your pack happened to
+       be full of stone would be indefensible, so these ignore capacity. */
+    if (C.PRECIOUS[id]) {
+      this.items[id] = (this.items[id] || 0) + n;
+      this.game.bus.emit('item', { id: id, n: n });
+      return n;
+    }
     const room = this.capacity() - this.used();
     if (room <= 0) {
       if (!silent) this.game.ui.warnFull();

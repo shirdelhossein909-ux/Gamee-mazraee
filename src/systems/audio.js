@@ -242,6 +242,12 @@
   const SCALE_NIGHT = [0, 3, 5, 7, 10, 12, 15, 17];     // minor pentatonic
   const CHORDS_DAY = [[0, 4, 7], [5, 9, 12], [7, 11, 14], [2, 5, 9]];
   const CHORDS_NIGHT = [[0, 3, 7], [8, 12, 15], [5, 8, 12], [3, 7, 10]];
+  /* Near a working musician the score bends toward the flattened-second
+     colour of dastgāh-e Šur — the sound most people hear as "Persian".
+     Equal temperament cannot give us a true koron, so the tar voice leans
+     on the interval instead, which reads correctly enough. */
+  const SCALE_SHUR = [0, 1, 3, 5, 7, 8, 10, 12, 13, 15];
+  const CHORDS_SHUR = [[0, 3, 7], [1, 5, 8], [0, 5, 10], [3, 7, 12]];
   const ROOT = 130.81;   // C3
 
   const midiFreq = (semi) => ROOT * Math.pow(2, semi / 12);
@@ -250,12 +256,15 @@
     if (!this.ready || this.vol.music <= 0.001) return;
     const night = this.game.sky ? this.game.sky.nightFactor > 0.55 : false;
     const storm = this.game.sky && this.game.sky.weather === 'storm';
-    const beat = night ? 2.6 : 2.05;
+    /* is anyone playing within earshot? if so the whole score changes mode */
+    const tar = this.game.villagers ? this.game.villagers.musicNear(
+      this.game.player.pos.x, this.game.player.pos.z) : null;
+    const beat = tar ? 2.3 : (night ? 2.6 : 2.05);
 
     this._barT -= dt;
     if (this._barT <= 0) {
       this._barT = beat * 4;
-      const chords = night ? CHORDS_NIGHT : CHORDS_DAY;
+      const chords = tar ? CHORDS_SHUR : night ? CHORDS_NIGHT : CHORDS_DAY;
       this._chordIdx = (this._chordIdx + 1) % chords.length;
       const ch = chords[this._chordIdx];
       // pad
@@ -275,16 +284,43 @@
 
     this._noteT -= dt;
     if (this._noteT <= 0) {
-      this._noteT = beat * (Math.random() < 0.42 ? 0.5 : 1);
-      if (Math.random() < (storm ? 0.32 : 0.62)) {
-        const scale = night ? SCALE_NIGHT : SCALE_DAY;
+      this._noteT = beat * (tar ? (Math.random() < 0.6 ? 0.25 : 0.5)
+        : (Math.random() < 0.42 ? 0.5 : 1));
+      if (Math.random() < (storm ? 0.32 : tar ? 0.9 : 0.62)) {
+        const scale = tar ? SCALE_SHUR : night ? SCALE_NIGHT : SCALE_DAY;
         const n = scale[Math.floor(Math.random() * scale.length)] + (Math.random() < 0.3 ? 12 : 0);
-        this.tone({
+        if (tar) this.tarNote(n, tar);
+        else this.tone({
           freq: midiFreq(n), type: night ? 'sine' : 'triangle',
           dur: 0.9, gain: night ? 0.09 : 0.1, attack: 0.02,
           filter: 'lowpass', cutoff: 2600, bus: this.busMusic, echo: true
         });
       }
+    }
+  };
+
+  /* A plucked string: a bright, fast attack with a doubled octave and a
+     little pitch fall, which is what makes a tar sound like a tar and not
+     like the pad. `near` is 1 at the player's feet and 0 at the edge of
+     earshot, so the playing genuinely comes from somewhere. */
+  Audio.prototype.tarNote = function (semi, near) {
+    const f = midiFreq(semi);
+    const gain = 0.055 + 0.075 * near;
+    this.tone({
+      freq: f * 1.004, to: f, type: 'sawtooth', dur: 0.55, gain: gain,
+      attack: 0.004, filter: 'lowpass', cutoff: 1500 + near * 1800, q: 3.2,
+      bus: this.busMusic, echo: true
+    });
+    this.tone({
+      freq: f * 2, type: 'triangle', dur: 0.3, gain: gain * 0.5, attack: 0.003,
+      filter: 'lowpass', cutoff: 3200, bus: this.busMusic
+    });
+    /* the sympathetic drone every long-necked lute has */
+    if (Math.random() < 0.3) {
+      this.tone({
+        freq: midiFreq(-12), type: 'sine', dur: 1.4, gain: gain * 0.55,
+        attack: 0.02, bus: this.busMusic
+      });
     }
   };
 
@@ -599,6 +635,48 @@
     setTimeout(function () {
       try { e.osc.stop(); e.osc2.stop(); e.gain.disconnect(); } catch (x) { }
     }, 700);
+  };
+
+  /* =========================================================
+     MYTH & DISASTER
+     ========================================================= */
+  /** the Simorgh: a huge falling cry over a wingbeat of air */
+  A.simorgh = function () {
+    this.tone({ freq: 1650, to: 420, type: 'sawtooth', dur: 1.5, gain: 0.20, attack: 0.03, filter: 'bandpass', cutoff: 1400, q: 2.4, echo: true });
+    this.tone({ freq: 2400, to: 700, type: 'triangle', dur: 1.2, gain: 0.12, attack: 0.05, delay: 0.08, echo: true });
+    for (let i = 0; i < 4; i++) {
+      this.burst({ freq: 240, to: 90, dur: 0.5, gain: 0.16, q: 0.7, delay: 0.5 + i * 0.42, filter: 'lowpass' });
+    }
+    this.tone({ freq: 120, to: 78, type: 'sine', dur: 2.4, gain: 0.16, attack: 0.4 });
+  };
+  /** something very large clearing its throat inside a mountain */
+  A.omen = function () {
+    this.tone({ freq: 62, to: 38, type: 'sawtooth', dur: 2.6, gain: 0.26, attack: 0.25, filter: 'lowpass', cutoff: 180 });
+    this.tone({ freq: 94, to: 55, type: 'square', dur: 1.8, gain: 0.10, attack: 0.3, filter: 'lowpass', cutoff: 240, delay: 0.2 });
+    this.burst({ freq: 150, to: 55, dur: 2.2, gain: 0.22, q: 0.5, filter: 'lowpass', delay: 0.1 });
+  };
+  /** waking from a dream: a soft bell, backwards-feeling */
+  A.dream = function () {
+    for (let i = 0; i < 5; i++) {
+      this.tone({
+        freq: 520 * Math.pow(2, [0, 3, 7, 10, 12][i] / 12), type: 'sine',
+        dur: 1.6, gain: 0.10, attack: 0.5, delay: i * 0.24, echo: true
+      });
+    }
+  };
+  /** the low build before the ground moves */
+  A.rumble = function (seconds) {
+    const d = seconds || 4;
+    this.tone({ freq: 40, to: 30, type: 'sine', dur: d, gain: 0.22, attack: d * 0.55, filter: 'lowpass', cutoff: 120 });
+    this.burst({ freq: 90, to: 45, dur: d, gain: 0.20, q: 0.4, filter: 'lowpass', attack: d * 0.5 });
+  };
+  /** the shock itself */
+  A.quake = function () {
+    this.burst({ freq: 400, to: 40, dur: 2.6, gain: 0.42, q: 0.4, filter: 'lowpass' });
+    this.tone({ freq: 70, to: 26, type: 'square', dur: 2.2, gain: 0.24, attack: 0.02, filter: 'lowpass', cutoff: 150 });
+    for (let i = 0; i < 6; i++) {
+      this.burst({ freq: 900, to: 200, dur: 0.4, gain: 0.2, q: 1.4, delay: 0.15 + Math.random() * 2.4 });
+    }
   };
 
   /* =========================================================

@@ -26,6 +26,7 @@
     this.wFog = 1;
     this._flash = 0;
     this._windAngle = Math.random() * 6.283;
+    this._moonSide = new THREE.Vector3(1, 0, 0);
 
     this._buildLights();
     this._buildDome();
@@ -117,6 +118,14 @@
     this.moonDisc = new THREE.Mesh(new THREE.SphereGeometry(11, 12, 10), moonMat);
     this.moonDisc.frustumCulled = false;
     this.group.add(this.moonDisc);
+
+    /* The phase is drawn by parking a sky-coloured ball just in front of the
+       moon and sliding it across. Cheap, and it reads correctly from the
+       ground — which is all a moon has to do. */
+    const shadeMat = new THREE.MeshBasicMaterial({ color: 0x0b1020, fog: false });
+    this.moonShade = new THREE.Mesh(new THREE.SphereGeometry(11.4, 12, 10), shadeMat);
+    this.moonShade.frustumCulled = false;
+    this.group.add(this.moonShade);
   };
 
   /* ===================== STARS ===================== */
@@ -406,6 +415,23 @@
     this.sunDisc.visible = upY > -0.15;
     this.moonDisc.position.set(px - upX * 430, -upY * 430, pz - upZ * 430);
     this.moonDisc.visible = -upY > -0.15;
+    /* slide the shade across by how far through the lunar month we are:
+       0 (full) leaves the disc clear, 0.5 (new) covers it completely */
+    const lit = this.moonLit();
+    const mx = px - upX * 430, my = -upY * 430, mz = pz - upZ * 430;
+    // a horizontal unit vector at right angles to the moon, to slide along
+    const sl = Math.hypot(upZ, upX) || 1;
+    this._moonSide.set(upZ / sl, 0, -upX / sl);
+    const mlen = Math.hypot(mx - px, my, mz - pz) || 1;
+    const off = (1 - lit) * 22 - 11;                 // -11 (clear) .. +11 (covered)
+    /* push it a touch toward the camera so depth testing hides the right part */
+    this.moonShade.position.set(
+      mx - ((mx - px) / mlen) * 6 + off * this._moonSide.x,
+      my - (my / mlen) * 6 + off * this._moonSide.y,
+      mz - ((mz - pz) / mlen) * 6 + off * this._moonSide.z
+    );
+    this.moonShade.material.color.copy(c.top.value).multiplyScalar(0.9);
+    this.moonShade.visible = this.moonDisc.visible && lit < 0.97;
     this.cloudMat.opacity = 0.28 + (1 - this.wLight) * 0.62;
     mixHex(this.cloudMat.color, 0x8b96ad, 0xffffff, dayF);
     if (this.weather === 'storm') this.cloudMat.color.lerp(tmpHex(0x6a7078), 0.75);
@@ -461,6 +487,32 @@
   Sky.prototype.isNight = function () {
     return this.time.hours < T.dayStart + 0.6 || this.time.hours > T.dayEnd - 0.6;
   };
+  /* ===================== THE MOON =====================
+     The moon keeps a cycle of its own so "the night of the full moon" is a
+     date you can count toward — the Simorgh rite needs one, and it is a
+     nicer clock to plan around than a random roll. Day 1 opens on a full
+     moon so the first one is never far away. */
+  Sky.prototype.moonDay = function () {
+    /* nights belong to the day that is ending: at 02:00 the moon overhead
+       is still last evening's moon */
+    const d = this.time.day - (this.time.hours < T.dayStart ? 1 : 0);
+    return ((d - 1) % C.TIME.moonCycle + C.TIME.moonCycle) % C.TIME.moonCycle;
+  };
+  /** 1 at full moon, 0 at new moon */
+  Sky.prototype.moonLit = function () {
+    const t = this.moonDay() / C.TIME.moonCycle;
+    return (Math.cos(t * 6.283185307) + 1) / 2;
+  };
+  Sky.prototype.moonPhase = function () {
+    return C.MOON_PHASES[this.moonDay() % C.MOON_PHASES.length] || C.MOON_PHASES[0];
+  };
+  Sky.prototype.isFullMoon = function () { return this.moonDay() === 0; };
+  /** in-game days until the next full moon (0 tonight) */
+  Sky.prototype.daysToFullMoon = function () {
+    const d = this.moonDay();
+    return d === 0 ? 0 : C.TIME.moonCycle - d;
+  };
+
   Sky.prototype.phaseIcon = function () {
     const h = this.time.hours;
     if (h < T.dawn) return '🌙';

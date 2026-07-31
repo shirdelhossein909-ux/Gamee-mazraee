@@ -21,7 +21,8 @@
     stone: { shirt: 0x5a5a62, hat: 0x9a9a9a },
     hunt: { shirt: 0x3f6a3a, hat: 0x2f5a2a },
     farm: { shirt: 0x8a8a3a, hat: 0xc7a24d },
-    guard: { shirt: 0x8a3a3a, hat: 0x6a6a72 }
+    guard: { shirt: 0x8a3a3a, hat: 0x6a6a72 },
+    music: { shirt: 0x6a3a8a, hat: 0x8a5aa8 }
   };
   /* A hired specialist wears the same trade colours in a brighter cut, with
      a diamond at the collar — spot the expensive one across the field. */
@@ -30,7 +31,8 @@
     stone: { shirt: 0x3fa6c8, hat: 0x2a86a8 },
     hunt: { shirt: 0x2fb0a0, hat: 0x1f8f82 },
     farm: { shirt: 0x46b8c8, hat: 0x2f96a8 },
-    guard: { shirt: 0x5a86d8, hat: 0x3f62b0 }
+    guard: { shirt: 0x5a86d8, hat: 0x3f62b0 },
+    music: { shirt: 0x9a5ad8, hat: 0x6a3ab0 }
   };
   const HUNT_RANGE = 9;      // a hunter draws his bow from here
   /* straight on first, then wider and wider sidesteps around an obstacle */
@@ -152,6 +154,16 @@
       }
       v.obj.visible = pd < 140 * 140;
     }
+
+    /* Standing near someone playing is genuinely restful — you get your
+       wind back faster, which is the point of paying for a musician. */
+    const near = this.musicNear(pp.x, pp.z);
+    if (near !== null) {
+      const p = g.player;
+      const gain = hours * C.MUSIC_JOB.energyPerHour * near;
+      p.energy = Math.min(100, p.energy + gain);
+      p.stamina = Math.min(p.maxStamina, p.stamina + gain * 2);
+    }
   };
 
   Villagers.prototype._pose = function (v, moving, dt) {
@@ -261,6 +273,9 @@
       case 'stone': return !!(v.node && g.world.nodes.has(v.node.id));
       case 'hunt': return !!(v.prey && !v.prey.dead);
       case 'farm': return !!(v.plot && v.plot.crop && v.plot.stage >= 3);
+      /* a player stays put: as long as there is somewhere to play, the
+         gig continues and they are not sent looking for new work */
+      case 'music': return !!this.stage();
       default: return false;
     }
   };
@@ -314,8 +329,30 @@
         v.tz = home.z + Math.sin(ang) * r;
         return;
       }
+      case 'music': {
+        /* play where people are: the garden first, then a fountain, a
+           gazebo, the inn, the council table — failing all that, the
+           middle of town. */
+        const spot = this.stage();
+        if (spot) {
+          const a = Math.random() * 6.283;
+          v.tx = spot.x + Math.cos(a) * (spot.r || 1.5);
+          v.tz = spot.z + Math.sin(a) * (spot.r || 1.5);
+          v.hasTarget = true;
+          return;
+        }
+        break;
+      }
     }
-    // nothing to work on: stroll
+    /* nothing to work on: drift toward wherever the town is pleasant —
+       a garden, or whoever is playing — and otherwise stroll */
+    const rest = this.restSpot();
+    if (rest && Math.random() < 0.75) {
+      const a = Math.random() * 6.283, r = Math.random() * rest.r;
+      v.tx = rest.x + Math.cos(a) * r;
+      v.tz = rest.z + Math.sin(a) * r;
+      return;
+    }
     const b = g.building;
     if (b && b.list.length && Math.random() < 0.7) {
       const t = b.list[Math.floor(Math.random() * b.list.length)];
@@ -327,6 +364,66 @@
       v.tx = home.x + Math.cos(a) * r;
       v.tz = home.z + Math.sin(a) * r;
     }
+  };
+
+  /* ===================== MUSIC & REST =====================
+     A musician needs somewhere worth standing, and everyone off duty
+     needs somewhere worth going. Both come from the same short list of
+     places a town builds for pleasure rather than for profit. */
+  const STAGE_ORDER = ['garden', 'fountain', 'gazebo', 'cascade', 'tavern', 'council', 'town_hall'];
+  Villagers.prototype.stage = function () {
+    const b = this.game.building;
+    if (!b || !b.list.length) return null;
+    for (const id of STAGE_ORDER) {
+      let best = null;
+      for (const s of b.list) {
+        if (s.defId !== id) continue;
+        if (!best || s.level > best.level) best = s;
+      }
+      if (best) return { x: best.x, z: best.z, r: id === 'garden' ? 3.2 : 1.8, b: best };
+    }
+    const c = this.center();
+    return { x: c.x, z: c.z, r: 2.5, b: null };
+  };
+
+  /** the nicest place in town to be when you are not working */
+  Villagers.prototype.restSpot = function () {
+    const b = this.game.building;
+    if (!b || !b.list.length) return null;
+    /* a musician at work outranks even the garden — people gather round */
+    for (const v of this.list) {
+      if (v.job === 'music' && v.working) {
+        return { x: v.x, z: v.z, r: C.MUSIC_JOB.restRadius };
+      }
+    }
+    let best = null, bestR = 0;
+    for (const s of b.list) {
+      const eff = s.def.effects ? s.def.effects(s.level) : {};
+      if (!eff.restRadius) continue;
+      if (eff.restRadius > bestR) { bestR = eff.restRadius; best = s; }
+    }
+    return best ? { x: best.x, z: best.z, r: bestR } : null;
+  };
+
+  /** town-wide happiness from everyone currently playing */
+  Villagers.prototype.musicHappy = function () {
+    let n = 0;
+    for (const v of this.list) if (v.job === 'music' && v.working) n++;
+    return n * C.MUSIC_JOB.happyPerPlayer;
+  };
+
+  /** 0..1 — how close the nearest playing musician is, or null if none */
+  Villagers.prototype.musicNear = function (x, z) {
+    const R = C.MUSIC_JOB.radius;
+    let best = null;
+    for (const v of this.list) {
+      if (v.job !== 'music' || !v.working) continue;
+      const d = U.dist(x, z, v.x, v.z);
+      if (d > R) continue;
+      const k = 1 - d / R;
+      if (best === null || k > best) best = k;
+    }
+    return best;
   };
 
   Villagers.prototype._nearestNode = function (v, kind, radius) {
@@ -535,7 +632,7 @@
     // a guard carries a bow, a worker a tool
     const held = v.job === 'guard' ? 'bow' : v.job === 'wood' ? 'axe'
       : v.job === 'stone' ? 'pickaxe' : v.job === 'hunt' ? 'bow'
-        : v.job === 'farm' ? 'hoe' : null;
+        : v.job === 'farm' ? 'hoe' : v.job === 'music' ? 'tar' : null;
     if (held) {
       const m = M.toolModel(held, 2);
       if (m) {

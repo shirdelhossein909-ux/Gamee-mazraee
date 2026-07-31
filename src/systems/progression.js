@@ -49,8 +49,12 @@
     }
   };
 
-  /** every player level makes your hits land harder */
-  Progression.prototype.powerMul = function () { return 1 + (this.level - 1) * 0.06; };
+  /** every player level makes your hits land harder — and so does the
+      White Div's heart, once you have squeezed it */
+  Progression.prototype.powerMul = function () {
+    const myth = this.game.myth;
+    return (1 + (this.level - 1) * 0.06) * (1 + (myth ? myth.heartPower : 0));
+  };
 
   Progression.prototype.skill = function (id) { return this.skills[id] || { xp: 0, level: 1 }; };
 
@@ -133,7 +137,11 @@
     this.population = s ? s.population() : this.housing;
     const happy = b ? b.totalEffect('happy') : 0;
     const crowding = s && s.homeless() > 0 ? -Math.min(25, s.homeless() * 4) : 0;
-    this.happiness = Math.round(U.clamp(50 + happy + this.foodMood + crowding, 0, 100));
+    /* a musician in the square lifts the whole town while they play */
+    const music = this.game.villagers ? this.game.villagers.musicHappy() : 0;
+    this.happiness = Math.round(U.clamp(50 + happy + music + this.foodMood + crowding, 0, 100));
+    /* nothing troubles a blessed town */
+    if (this.game.myth && this.game.myth.blessed()) this.happiness = C.MYTH.simorgh.blessHappy;
   };
 
   /* ===================== TIERS ===================== */

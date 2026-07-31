@@ -1282,6 +1282,571 @@
     return assemble(p);
   };
 
+  /* =========================================================
+     THE PERSIAN GARDEN — چهارباغ
+     Four planted quarters split by a cross of water channels, a tiled
+     pool where the arms meet, cypresses at the corners, pomegranates
+     inside and roses along the walks. Lanterns come on at dusk.
+     ========================================================= */
+  const TILE_BLUE = 0x2f6fa8, TILE_LIGHT = 0x63a8d8, WATER_BLUE = 0x3a8fc8;
+
+  /** a slim cypress: stacked cones narrowing to a point */
+  function cypressParts(p, x, y, z, h, c) {
+    const dark = 0x24523c;
+    p.push({ g: P.cyl6, c: COL.woodDark, p: [x, y + 0.2, z], s: [0.16, 0.4, 0.16] });
+    for (let i = 0; i < 4; i++) {
+      const t = i / 4;
+      p.push({
+        g: P.cone5, c: i % 2 ? c : dark,
+        p: [x, y + 0.4 + h * (0.18 + t * 0.72), z],
+        s: [(0.86 - t * 0.42) * (h * 0.28), h * 0.42, (0.86 - t * 0.42) * (h * 0.28)]
+      });
+    }
+  }
+  /** a small round fruit tree with dots of fruit */
+  function fruitTreeParts(p, x, y, z, h, leaf, fruit, rnd) {
+    p.push({ g: P.cyl6, c: 0x6b4a2c, p: [x, y + h * 0.28, z], s: [0.2, h * 0.56, 0.2] });
+    p.push({ g: P.ico, c: leaf, p: [x, y + h * 0.78, z], s: [h * 0.68, h * 0.52, h * 0.68] });
+    p.push({ g: P.ico, c: leaf, p: [x + h * 0.16, y + h * 0.62, z - h * 0.14], s: [h * 0.42, h * 0.34, h * 0.42] });
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * 6.283 + (rnd || 0);
+      p.push({
+        g: P.sph, c: fruit,
+        p: [x + Math.cos(a) * h * 0.38, y + h * (0.68 + (i % 3) * 0.08), z + Math.sin(a) * h * 0.38],
+        s: [0.17, 0.19, 0.17]
+      });
+    }
+  }
+  /** a rose: a green cushion with red buds on top */
+  function roseParts(p, x, y, z, s, col) {
+    p.push({ g: P.ico, c: 0x4a8040, p: [x, y + 0.16 * s, z], s: [0.5 * s, 0.3 * s, 0.5 * s] });
+    for (let i = 0; i < 3; i++) {
+      const a = (i / 3) * 6.283;
+      p.push({ g: P.ico, c: col || 0xc2344f, p: [x + Math.cos(a) * 0.16 * s, y + 0.34 * s, z + Math.sin(a) * 0.16 * s], s: [0.15 * s, 0.15 * s, 0.15 * s] });
+    }
+  }
+
+  BM.garden = function (l) {
+    const p = [];
+    const R = 5.6;                       // half the 12x12 footprint, minus the wall
+    const chan = 0.9;                    // half-width of the water channels
+
+    /* low retaining wall all the way round, with a gap on each side */
+    for (const s of [-1, 1]) {
+      for (const seg of [[-1, -2.1], [1, 2.1]]) {
+        p.push({ g: P.box, c: COL.brick, p: [seg[1] * 1.65, 0.28, s * R], s: [4.2, 0.56, 0.4] });
+        p.push({ g: P.box, c: s > 0 ? TILE_BLUE : TILE_LIGHT, p: [seg[1] * 1.65, 0.58, s * R], s: [4.2, 0.08, 0.44] });
+        p.push({ g: P.box, c: COL.brick, p: [s * R, 0.28, seg[1] * 1.65], s: [0.4, 0.56, 4.2] });
+        p.push({ g: P.box, c: s > 0 ? TILE_LIGHT : TILE_BLUE, p: [s * R, 0.58, seg[1] * 1.65], s: [0.44, 0.08, 4.2] });
+      }
+      // corner posts
+      for (const s2 of [-1, 1]) p.push({ g: P.box, c: COL.stone, p: [s * R, 0.42, s2 * R], s: [0.6, 0.84, 0.6] });
+    }
+
+    /* the four planted quarters */
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+      const cx = sx * 3.0, cz = sz * 3.0;
+      p.push({ g: P.box, c: 0x4d7a3a, p: [cx, 0.06, cz], s: [3.9, 0.12, 3.9] });
+      p.push({ g: P.box, c: COL.stone, p: [cx, 0.09, cz], s: [4.1, 0.06, 4.1] });
+      fruitTreeParts(p, cx + sx * 0.7, 0.12, cz + sz * 0.7, 1.9 + l * 0.12, 0x3f7a3c, 0xc0392b, sx * sz);
+      roseParts(p, cx - sx * 1.2, 0.12, cz - sz * 1.2, 1, 0xc2344f);
+      roseParts(p, cx - sx * 1.3, 0.12, cz + sz * 0.9, 1, 0xe8b0c0);
+      roseParts(p, cx + sx * 1.1, 0.12, cz - sz * 1.4, 1, 0xd8d0e8);
+      if (l >= 2) roseParts(p, cx, 0.12, cz - sz * 0.4, 0.9, 0xf0c437);
+    }
+
+    /* cross of water channels — the whole point of a chahar bagh */
+    for (const axis of [0, 1]) {
+      const w = axis ? chan * 2 : R * 2, d = axis ? R * 2 : chan * 2;
+      p.push({ g: P.box, c: COL.stone, p: [0, 0.08, 0], s: [w + 0.5, 0.16, d + 0.5] });
+      p.push({ g: P.box, c: TILE_BLUE, p: [0, 0.14, 0], s: [w, 0.1, d] });
+      p.push({ g: P.box, c: WATER_BLUE, glow: true, p: [0, 0.2, 0], s: [w - 0.24, 0.04, d - 0.24] });
+    }
+
+    /* the pool at the crossing */
+    p.push({ g: P.cyl, c: COL.marble, p: [0, 0.2, 0], s: [3.5, 0.4, 3.5] });
+    p.push({ g: P.cyl, c: TILE_BLUE, p: [0, 0.34, 0], s: [3.0, 0.2, 3.0] });
+    p.push({ g: P.cyl, c: WATER_BLUE, glow: true, p: [0, 0.42, 0], s: [2.8, 0.06, 2.8] });
+    if (l >= 2) {
+      p.push({ g: P.cyl, c: COL.marble, p: [0, 0.6, 0], s: [0.5, 0.5, 0.5] });
+      p.push({ g: P.cyl, c: COL.marble, p: [0, 0.9, 0], s: [1.1, 0.14, 1.1] });
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * 6.283;
+        p.push({ g: P.box, c: 0x9fd8e8, glow: true, p: [Math.cos(a) * 0.62, 0.78, Math.sin(a) * 0.62], r: [0, -a, 0.55], s: [0.6, 0.05, 0.05] });
+      }
+    }
+    if (l >= 4) p.push({ g: P.sph, c: COL.gold, p: [0, 1.15, 0], s: [0.36, 0.36, 0.36] });
+
+    /* cypresses at the four corners, growing with the level */
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+      cypressParts(p, sx * (R - 0.9), 0.1, sz * (R - 0.9), 3.4 + l * 0.4, 0x2c5f34);
+    }
+
+    /* lantern posts along the walks, lit at night */
+    const lamps = l >= 3 ? 8 : 4;
+    for (let i = 0; i < lamps; i++) {
+      const a = (i / lamps) * 6.283 + 0.39;
+      const lx = Math.cos(a) * (R - 2.0), lz = Math.sin(a) * (R - 2.0);
+      p.push({ g: P.cyl6, c: COL.iron, p: [lx, 0.7, lz], s: [0.12, 1.4, 0.12] });
+      p.push({ g: P.taper(0.9, 0.5, 4), c: 0xffdd88, glow: true, p: [lx, 1.55, lz], s: [0.4, 0.44, 0.4] });
+      p.push({ g: P.cone5, c: COL.iron, p: [lx, 1.85, lz], s: [0.44, 0.24, 0.44] });
+    }
+
+    /* benches on the cross walks, so people have somewhere to sit */
+    if (l >= 2) for (const s of [-1, 1]) {
+      p.push({ g: P.box, c: COL.plank, p: [s * (R - 1.5), 0.46, 0], r: [0, 1.57, 0], s: [1.7, 0.12, 0.5] });
+      p.push({ g: P.box, c: COL.woodDark, p: [s * (R - 1.5), 0.24, 0], s: [0.4, 0.44, 1.4] });
+      p.push({ g: P.box, c: COL.plank, p: [0, 0.46, s * (R - 1.5)], s: [1.7, 0.12, 0.5] });
+      p.push({ g: P.box, c: COL.woodDark, p: [0, 0.24, s * (R - 1.5)], s: [1.4, 0.44, 0.4] });
+    }
+    return assemble(p);
+  };
+
+  /* =========================================================
+     DECORATION — small pieces you buy purely because they look good
+     ========================================================= */
+  /** stepped stone plinth shared by most of the statuary */
+  function plinth(p, w, h, c) {
+    p.push({ g: P.box, c: c || COL.stoneDark, p: [0, h * 0.25, 0], s: [w, h * 0.5, w] });
+    p.push({ g: P.box, c: c || COL.stone, p: [0, h * 0.68, 0], s: [w * 0.82, h * 0.36, w * 0.82] });
+  }
+
+  BM.statue = function (l) {
+    const p = [];
+    plinth(p, 1.5, 0.9);
+    const c = l >= 3 ? COL.marble : COL.stone;
+    p.push({ g: P.box, c: c, p: [0, 1.55, 0], s: [0.5, 0.9, 0.32] });        // torso
+    p.push({ g: P.box, c: c, p: [0, 2.18, 0], s: [0.34, 0.36, 0.32] });      // head
+    p.push({ g: P.cyl, c: l >= 2 ? COL.gold : c, p: [0, 2.42, 0], s: [0.42, 0.14, 0.42] });
+    for (const sx of [-1, 1]) p.push({ g: P.box, c: c, p: [sx * 0.34, 1.6, 0], r: [0, 0, sx * 0.35], s: [0.17, 0.8, 0.17] });
+    for (const sx of [-1, 1]) p.push({ g: P.box, c: c, p: [sx * 0.15, 1.0, 0], s: [0.2, 0.34, 0.22] });
+    p.push({ g: P.cyl6, c: l >= 2 ? COL.gold : COL.iron, p: [0.42, 1.75, 0], r: [0, 0, 0.2], s: [0.07, 1.6, 0.07] });
+    return assemble(p);
+  };
+
+  BM.horse_statue = function (l) {
+    const p = [];
+    plinth(p, 2.4, 0.8);
+    const c = l >= 3 ? COL.gold : (l >= 2 ? 0xb08a4a : 0x8a7a5a);
+    p.push({ g: P.ico, c: c, p: [0, 1.75, 0], s: [0.85, 1.0, 2.1] });        // barrel
+    p.push({ g: P.cyl6, c: c, p: [0, 2.2, 0.75], r: [0.7, 0, 0], s: [0.45, 1.1, 0.45] });   // neck
+    p.push({ g: P.ico, c: c, p: [0, 2.7, 1.15], r: [0.35, 0, 0], s: [0.42, 0.44, 0.86] });  // head
+    for (const sx of [-1, 1]) p.push({ g: P.cone5, c: c, p: [sx * 0.16, 2.98, 1.0], s: [0.16, 0.26, 0.16] });
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+      p.push({ g: P.cyl6, c: c, p: [sx * 0.38, 1.0, sz * 0.75], r: [sz * 0.22, 0, 0], s: [0.24, 1.5, 0.24] });
+    }
+    // mane and tail
+    for (let i = 0; i < 5; i++) p.push({ g: P.box, c: COL.stoneDark, p: [0, 2.5 - i * 0.14, 0.5 + i * 0.12], r: [0.6, 0, 0], s: [0.12, 0.4, 0.2] });
+    p.push({ g: P.cone5, c: COL.stoneDark, p: [0, 1.95, -1.1], r: [-0.7, 0, 0], s: [0.3, 1.0, 0.3] });
+    return assemble(p);
+  };
+
+  BM.lion = function (l) {
+    const p = [];
+    plinth(p, 2.0, 0.6);
+    const c = l >= 2 ? COL.marble : 0x9a8f78;
+    p.push({ g: P.ico, c: c, p: [0, 1.1, -0.1], s: [0.9, 0.85, 2.0] });
+    p.push({ g: P.ico, c: c, p: [0, 1.6, 0.85], s: [0.85, 0.85, 0.8] });        // mane
+    p.push({ g: P.box, c: c, p: [0, 1.55, 1.2], s: [0.45, 0.42, 0.4] });        // muzzle
+    for (const sx of [-1, 1]) p.push({ g: P.sph, c: l >= 3 ? COL.gold : 0x3a3a3a, p: [sx * 0.17, 1.66, 1.4], s: [0.12, 0.12, 0.08] });
+    for (const sx of [-1, 1]) {
+      p.push({ g: P.box, c: c, p: [sx * 0.38, 0.9, 0.75], s: [0.28, 1.0, 0.3] });   // front legs, planted
+      p.push({ g: P.ico, c: c, p: [sx * 0.4, 0.75, -0.85], s: [0.36, 0.7, 0.7] });  // haunches
+    }
+    p.push({ g: P.cyl4, c: c, p: [0, 1.2, -1.15], r: [-0.5, 0, 0], s: [0.14, 0.9, 0.14] });
+    return assemble(p);
+  };
+
+  BM.column = function (l) {
+    const p = [];
+    const h = 4.2 + l * 0.7;
+    p.push({ g: P.cyl, c: COL.stoneDark, p: [0, 0.18, 0], s: [1.7, 0.36, 1.7] });
+    p.push({ g: P.cyl, c: COL.marble, p: [0, 0.5, 0], s: [1.3, 0.3, 1.3] });
+    // fluting: a ring of thin staves around the shaft
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * 6.283;
+      p.push({ g: P.cyl6, c: i % 2 ? COL.marble : 0xcac6ba, p: [Math.cos(a) * 0.5, 0.65 + h / 2, Math.sin(a) * 0.5], s: [0.19, h, 0.19] });
+    }
+    p.push({ g: P.cyl, c: COL.marble, p: [0, 0.65 + h, 0], s: [1.25, 0.26, 1.25] });
+    if (l >= 2) {
+      // the twin bull capital
+      for (const sz of [-1, 1]) {
+        p.push({ g: P.ico, c: 0xd8d2c0, p: [0, 1.05 + h, sz * 0.62], s: [0.5, 0.55, 0.9] });
+        p.push({ g: P.box, c: 0xd8d2c0, p: [0, 1.3 + h, sz * 1.1], s: [0.34, 0.36, 0.4] });
+        for (const sx of [-1, 1]) p.push({ g: P.cone5, c: COL.gold, p: [sx * 0.2, 1.55 + h, sz * 1.05], r: [sz * 0.5, 0, sx * 0.4], s: [0.12, 0.34, 0.12] });
+      }
+    }
+    return assemble(p);
+  };
+
+  BM.archway = function (l) {
+    const p = [];
+    const w = 4.4, h = 4.6 + l * 0.4;
+    for (const sx of [-1, 1]) {
+      p.push({ g: P.box, c: COL.brick, p: [sx * (w / 2 - 0.5), h / 2, 0], s: [1.0, h, 1.4] });
+      p.push({ g: P.box, c: TILE_BLUE, p: [sx * (w / 2 - 0.5), h * 0.55, 0.72], s: [0.62, h * 0.6, 0.06] });
+      p.push({ g: P.box, c: TILE_BLUE, p: [sx * (w / 2 - 0.5), h * 0.55, -0.72], s: [0.62, h * 0.6, 0.06] });
+    }
+    // the pointed arch, drawn as a fan of small blocks
+    for (let i = 0; i <= 10; i++) {
+      const t = i / 10, a = Math.PI * t;
+      const r = w / 2 - 0.5;
+      p.push({
+        g: P.box, c: i % 2 ? COL.brick : TILE_LIGHT,
+        p: [Math.cos(a) * r, h + Math.sin(a) * 1.5, 0], r: [0, 0, -a + Math.PI / 2], s: [0.55, 0.5, 1.4]
+      });
+    }
+    p.push({ g: P.box, c: COL.brick, p: [0, h + 1.9, 0], s: [w + 0.6, 0.5, 1.7] });
+    p.push({ g: P.box, c: TILE_BLUE, p: [0, h + 2.22, 0], s: [w + 0.5, 0.16, 1.75] });
+    if (l >= 2) for (let i = 0; i < 5; i++) {
+      p.push({ g: P.box, c: i % 2 ? TILE_BLUE : TILE_LIGHT, p: [-1.6 + i * 0.8, h + 2.55, 0], s: [0.6, 0.5, 1.5] });
+    }
+    if (l >= 3) p.push({ g: P.cone5, c: COL.gold, p: [0, h + 3.1, 0], s: [0.5, 0.8, 0.5] });
+    // lanterns under the arch
+    for (const sx of [-1, 1]) p.push({ g: P.taper(0.9, 0.5, 4), c: 0xffdd88, glow: true, p: [sx * 1.3, h + 0.6, 0], s: [0.4, 0.5, 0.4] });
+    return assemble(p);
+  };
+
+  BM.obelisk = function (l) {
+    const p = [];
+    plinth(p, 1.6, 0.7);
+    const h = 3.2 + l * 0.6;
+    p.push({ g: P.taper(0.4, 0.75, 4), c: l >= 2 ? COL.marble : COL.stone, p: [0, 0.7 + h / 2, 0], r: [0, 0.785, 0], s: [1.1, h, 1.1] });
+    p.push({ g: P.pyr, c: l >= 3 ? COL.gold : COL.stoneDark, p: [0, 0.7 + h + 0.3, 0], r: [0, 0.785, 0], s: [0.62, 0.62, 0.62] });
+    // an inscription nobody reads
+    for (let i = 0; i < 5; i++) p.push({ g: P.box, c: COL.stoneDark, p: [0, 1.2 + i * 0.5, 0.29], s: [0.34, 0.06, 0.03] });
+    return assemble(p);
+  };
+
+  BM.urn = function (l) {
+    const p = [];
+    const s = 0.9 + l * 0.12;
+    p.push({ g: P.cyl, c: 0x8a5a3a, p: [0, 0.08 * s, 0], s: [0.5 * s, 0.16 * s, 0.5 * s] });
+    p.push({ g: P.sph, c: 0xa8663a, p: [0, 0.5 * s, 0], s: [0.95 * s, 0.9 * s, 0.95 * s] });
+    p.push({ g: P.taper(0.55, 0.85, 8), c: 0xa8663a, p: [0, 0.95 * s, 0], s: [0.6 * s, 0.34 * s, 0.6 * s] });
+    p.push({ g: P.cyl, c: 0x8a5a3a, p: [0, 1.13 * s, 0], s: [0.42 * s, 0.09 * s, 0.42 * s] });
+    for (const sx of [-1, 1]) p.push({ g: P.box, c: 0x8a5a3a, p: [sx * 0.45 * s, 0.78 * s, 0], r: [0, 0, sx * 0.5], s: [0.1 * s, 0.42 * s, 0.1 * s] });
+    if (l >= 2) for (let i = 0; i < 3; i++) p.push({ g: P.box, c: TILE_BLUE, p: [0, (0.4 + i * 0.18) * s, 0.47 * s], s: [0.5 * s, 0.05 * s, 0.05 * s] });
+    return assemble(p);
+  };
+
+  BM.flowerbed = function (l) {
+    const p = [];
+    p.push({ g: P.box, c: COL.brick, p: [0, 0.14, 0], s: [1.9, 0.28, 1.9] });
+    p.push({ g: P.box, c: COL.dirt, p: [0, 0.26, 0], s: [1.6, 0.1, 1.6] });
+    const cols = [0xc2344f, 0xf0c437, 0xd8d0e8, 0xe8b0c0, 0xffffff, 0xe07b2a];
+    const n = 5 + l * 2;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * 6.283 * 1.618, r = 0.2 + (i % 3) * 0.24;
+      const x = Math.cos(a) * r, z = Math.sin(a) * r;
+      p.push({ g: P.cyl6, c: 0x4a8040, p: [x, 0.4, z], s: [0.06, 0.24, 0.06] });
+      p.push({ g: P.ico, c: cols[i % cols.length], p: [x, 0.55, z], s: [0.19, 0.15, 0.19] });
+    }
+    return assemble(p, true);
+  };
+
+  BM.rosebush = function (l) {
+    const p = [];
+    p.push({ g: P.cyl, c: COL.dirt, p: [0, 0.06, 0], s: [0.8, 0.12, 0.8] });
+    roseParts(p, 0, 0.1, 0, 1.1 + l * 0.15, 0xc2344f);
+    if (l >= 2) { roseParts(p, 0.28, 0.1, -0.2, 0.8, 0xe8b0c0); roseParts(p, -0.26, 0.1, 0.24, 0.8, 0xd8d0e8); }
+    return assemble(p);
+  };
+
+  BM.cypress = function (l) { const p = []; cypressParts(p, 0, 0, 0, 4.0 + l * 0.9, 0x2c5f34); return assemble(p); };
+
+  BM.pomegranate = function (l) {
+    const p = [];
+    fruitTreeParts(p, 0, 0, 0, 2.4 + l * 0.5, 0x3f7a3c, 0xc0392b, 0.4);
+    return assemble(p);
+  };
+
+  BM.pool = function (l) {
+    const p = [];
+    const r = 1.85;
+    p.push({ g: P.box, c: COL.marble, p: [0, 0.2, 0], s: [r * 2, 0.4, r * 2] });
+    p.push({ g: P.box, c: TILE_BLUE, p: [0, 0.34, 0], s: [r * 2 - 0.6, 0.16, r * 2 - 0.6] });
+    p.push({ g: P.box, c: WATER_BLUE, glow: true, p: [0, 0.44, 0], s: [r * 2 - 0.75, 0.05, r * 2 - 0.75] });
+    // a border of alternating tiles
+    for (let i = 0; i < 8; i++) {
+      const t = -r + 0.25 + i * ((r * 2 - 0.5) / 7);
+      for (const s of [-1, 1]) {
+        p.push({ g: P.box, c: i % 2 ? TILE_BLUE : TILE_LIGHT, p: [t, 0.42, s * (r - 0.15)], s: [0.4, 0.06, 0.3] });
+        p.push({ g: P.box, c: i % 2 ? TILE_LIGHT : TILE_BLUE, p: [s * (r - 0.15), 0.42, t], s: [0.3, 0.06, 0.4] });
+      }
+    }
+    if (l >= 2) {
+      p.push({ g: P.cyl, c: COL.marble, p: [0, 0.62, 0], s: [0.42, 0.44, 0.42] });
+      p.push({ g: P.sph, c: 0x9fd8e8, glow: true, p: [0, 0.95, 0], s: [0.34, 0.34, 0.34] });
+    }
+    if (l >= 3) for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * 6.283;
+      p.push({ g: P.box, c: 0x9fd8e8, glow: true, p: [Math.cos(a) * 0.55, 0.82, Math.sin(a) * 0.55], r: [0, -a, 0.6], s: [0.55, 0.05, 0.05] });
+    }
+    return assemble(p, true);
+  };
+
+  BM.channel = function (l) {
+    const p = [];
+    p.push({ g: P.box, c: COL.stone, p: [0, 0.1, 0], s: [1.95, 0.2, 1.95] });
+    p.push({ g: P.box, c: TILE_BLUE, p: [0, 0.17, 0], s: [1.3, 0.1, 1.98] });
+    p.push({ g: P.box, c: WATER_BLUE, glow: true, p: [0, 0.23, 0], s: [1.15, 0.04, 1.99] });
+    for (const sx of [-1, 1]) p.push({ g: P.box, c: l >= 2 ? TILE_LIGHT : COL.stoneDark, p: [sx * 0.78, 0.24, 0], s: [0.36, 0.12, 1.95] });
+    return assemble(p, true);
+  };
+
+  BM.cascade = function (l) {
+    const p = [];
+    const steps = 2 + l;
+    for (let i = 0; i < steps; i++) {
+      const y = 0.25 + i * 0.45, w = 2.7 - i * 0.42;
+      p.push({ g: P.box, c: COL.stone, p: [0, y, -i * 0.32], s: [w, 0.45, 1.5 - i * 0.15] });
+      p.push({ g: P.box, c: TILE_BLUE, p: [0, y + 0.24, -i * 0.32], s: [w - 0.3, 0.06, 1.2 - i * 0.15] });
+      p.push({ g: P.box, c: WATER_BLUE, glow: true, p: [0, y + 0.29, -i * 0.32 + 0.3], s: [w - 0.5, 0.05, 0.5] });
+      // the sheet of water falling to the step below
+      p.push({ g: P.box, c: 0x9fd8e8, glow: true, p: [0, y - 0.05, -i * 0.32 + 0.78], r: [0.3, 0, 0], s: [w - 0.7, 0.5, 0.05] });
+    }
+    p.push({ g: P.box, c: COL.marble, p: [0, 0.1, 1.15], s: [3.0, 0.2, 0.9] });
+    p.push({ g: P.box, c: WATER_BLUE, glow: true, p: [0, 0.18, 1.15], s: [2.6, 0.05, 0.7] });
+    return assemble(p);
+  };
+
+  BM.bench = function (l) {
+    const p = [];
+    const c = l >= 2 ? COL.plank : COL.wood;
+    p.push({ g: P.box, c: c, p: [0, 0.46, 0], s: [1.8, 0.12, 0.55] });
+    for (const sx of [-1, 1]) {
+      p.push({ g: P.box, c: COL.woodDark, p: [sx * 0.72, 0.23, 0.2], s: [0.12, 0.46, 0.12] });
+      p.push({ g: P.box, c: COL.woodDark, p: [sx * 0.72, 0.23, -0.2], s: [0.12, 0.46, 0.12] });
+      p.push({ g: P.box, c: COL.woodDark, p: [sx * 0.72, 0.75, -0.24], s: [0.1, 0.62, 0.1] });
+    }
+    for (let i = 0; i < 3; i++) p.push({ g: P.box, c: c, p: [0, 0.72 + i * 0.16, -0.26], s: [1.7, 0.1, 0.08] });
+    if (l >= 3) p.push({ g: P.box, c: 0xc2344f, p: [0, 0.53, 0], s: [1.5, 0.05, 0.42] });
+    return assemble(p);
+  };
+
+  BM.gazebo = function (l) {
+    const p = [];
+    const r = 1.75, n = 8, h = 2.5;
+    p.push({ g: P.cyl, c: COL.stone, p: [0, 0.1, 0], s: [r * 2.2, 0.2, r * 2.2] });
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * 6.283;
+      const x = Math.cos(a) * r, z = Math.sin(a) * r;
+      p.push({ g: P.cyl6, c: COL.woodDark, p: [x, h / 2, z], s: [0.16, h, 0.16] });
+      if (i % 2 === 0 && l >= 2) {
+        // a bench between every other pair of posts
+        const a2 = ((i + 1) / n) * 6.283, mx = (x + Math.cos(a2) * r) / 2, mz = (z + Math.sin(a2) * r) / 2;
+        p.push({ g: P.box, c: COL.plank, p: [mx, 0.44, mz], r: [0, -a - 0.39, 0], s: [1.2, 0.1, 0.42] });
+      }
+    }
+    p.push({ g: P.cone, c: l >= 3 ? 0x8a3f6a : COL.cloth, p: [0, h + 0.7, 0], s: [r * 2.6, 1.4, r * 2.6] });
+    p.push({ g: P.cyl, c: COL.woodDark, p: [0, h + 0.06, 0], s: [r * 2.3, 0.12, r * 2.3] });
+    p.push({ g: P.sph, c: COL.gold, p: [0, h + 1.5, 0], s: [0.3, 0.36, 0.3] });
+    p.push({ g: P.taper(0.9, 0.5, 4), c: 0xffdd88, glow: true, p: [0, h + 0.15, 0], s: [0.42, 0.4, 0.42] });
+    return assemble(p);
+  };
+
+  BM.swing = function (l) {
+    const p = [];
+    const h = 2.5;
+    for (const sz of [-1, 1]) for (const sx of [-1, 1]) {
+      p.push({ g: P.cyl6, c: COL.wood, p: [sx * 0.85, h / 2, sz * 0.55], r: [0, 0, -sx * 0.3], s: [0.15, h, 0.15] });
+    }
+    p.push({ g: P.cyl6, c: COL.woodDark, p: [0, h - 0.06, 0], r: [0, 0, 1.57], s: [0.13, 2.4, 0.13] });
+    for (const sx of [-1, 1]) p.push({ g: P.box, c: 0xc7a24d, p: [sx * 0.42, h * 0.6, 0], s: [0.05, h * 0.78, 0.05] });
+    p.push({ g: P.box, c: l >= 2 ? COL.plank : COL.wood, p: [0, h * 0.22, 0], s: [1.0, 0.1, 0.42] });
+    if (l >= 3) for (const sx of [-1, 1]) p.push({ g: P.box, c: 0xd23b32, p: [sx * 0.5, h * 0.35, 0], s: [0.06, 0.34, 0.34] });
+    return assemble(p);
+  };
+
+  BM.hanglamp = function (l) {
+    const p = [];
+    const h = 2.6 + l * 0.25;
+    p.push({ g: P.cyl6, c: COL.stoneDark, p: [0, 0.1, 0], s: [0.5, 0.2, 0.5] });
+    p.push({ g: P.cyl6, c: COL.iron, p: [0, h / 2, 0], s: [0.13, h, 0.13] });
+    // the crook at the top
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * 1.4;
+      p.push({ g: P.cyl6, c: COL.iron, p: [Math.sin(a) * 0.42, h - 0.02 + Math.cos(a) * 0.12, 0], r: [0, 0, -a], s: [0.1, 0.34, 0.1] });
+    }
+    const lx = 0.55;
+    p.push({ g: P.box, c: COL.iron, p: [lx, h - 0.2, 0], s: [0.04, 0.3, 0.04] });
+    const cols = [0xff8a3a, 0xd23b32, 0x3f7a9e, 0x8a3f6a];
+    p.push({ g: P.taper(0.55, 0.95, 6), c: cols[(l - 1) % cols.length], glow: true, p: [lx, h - 0.58, 0], s: [0.46, 0.56, 0.46] });
+    p.push({ g: P.cone5, c: COL.iron, p: [lx, h - 0.28, 0], s: [0.42, 0.2, 0.42] });
+    p.push({ g: P.sph, c: COL.gold, p: [lx, h - 0.88, 0], s: [0.12, 0.14, 0.12] });
+    return assemble(p, true);
+  };
+
+  BM.torch = function (l) {
+    const p = [];
+    const h = 1.9 + l * 0.2;
+    p.push({ g: P.cyl6, c: COL.stoneDark, p: [0, 0.1, 0], s: [0.46, 0.2, 0.46] });
+    p.push({ g: P.cyl6, c: COL.wood, p: [0, h / 2, 0], s: [0.16, h, 0.16] });
+    p.push({ g: P.taper(0.95, 0.55, 6), c: COL.iron, p: [0, h + 0.14, 0], s: [0.4, 0.34, 0.4] });
+    p.push({ g: P.cone5, c: 0xff7a1e, glow: true, p: [0, h + 0.48, 0], s: [0.36, 0.6, 0.36] });
+    p.push({ g: P.cone5, c: 0xffd15c, glow: true, p: [0, h + 0.4, 0], s: [0.2, 0.4, 0.2] });
+    return assemble(p, true);
+  };
+
+  BM.banner = function (l) {
+    const p = [];
+    const h = 4.0 + l * 0.6;
+    p.push({ g: P.cyl6, c: COL.stoneDark, p: [0, 0.12, 0], s: [0.55, 0.24, 0.55] });
+    p.push({ g: P.cyl6, c: COL.wood, p: [0, h / 2, 0], s: [0.13, h, 0.13] });
+    p.push({ g: P.sph, c: COL.gold, p: [0, h + 0.15, 0], s: [0.22, 0.3, 0.22] });
+    const cols = [0x2f7a4a, 0xd23b32, 0x3f5f9e];
+    for (let i = 0; i < 4; i++) {
+      p.push({ g: P.box, c: cols[(i + l) % cols.length], p: [0.55, h - 0.45 - i * 0.42, Math.sin(i * 0.9) * 0.12], r: [0, Math.sin(i * 0.9) * 0.18, 0], s: [1.0, 0.4, 0.05] });
+    }
+    if (l >= 2) p.push({ g: P.ico, c: COL.gold, p: [0.55, h - 1.1, 0.05], s: [0.24, 0.28, 0.06] });
+    return assemble(p);
+  };
+
+  BM.signpost = function (l) {
+    const p = [];
+    p.push({ g: P.cyl6, c: COL.stoneDark, p: [0, 0.1, 0], s: [0.5, 0.2, 0.5] });
+    p.push({ g: P.cyl6, c: COL.wood, p: [0, 1.2, 0], s: [0.15, 2.4, 0.15] });
+    const dirs = [[1, 0.55], [-1, -0.9], [1, 2.2]];
+    for (let i = 0; i < Math.min(3, 1 + l); i++) {
+      const d = dirs[i % 3];
+      p.push({ g: P.box, c: COL.plank, p: [d[0] * 0.5, 1.4 + i * 0.42, 0], r: [0, d[1], 0], s: [1.0, 0.28, 0.07] });
+      p.push({ g: P.cone5, c: COL.plank, p: [d[0] * 1.0, 1.4 + i * 0.42, 0], r: [0, d[1], -d[0] * 1.57], s: [0.28, 0.3, 0.07] });
+    }
+    return assemble(p);
+  };
+
+  BM.paving = function (l) {
+    const p = [];
+    const shades = l >= 3 ? [COL.marble, 0xc8c4b8, TILE_LIGHT] : l >= 2 ? [0xa8a49a, 0x98948a, 0xb8b4aa] : [COL.stone, COL.stoneDark, 0x9a968c];
+    for (let ix = 0; ix < 3; ix++) for (let iz = 0; iz < 3; iz++) {
+      p.push({
+        g: P.box, c: shades[(ix + iz * 2) % shades.length],
+        p: [-0.63 + ix * 0.63, 0.06, -0.63 + iz * 0.63], s: [0.58, 0.12, 0.58]
+      });
+    }
+    return assemble(p, true);
+  };
+
+  BM.sundial = function (l) {
+    const p = [];
+    p.push({ g: P.cyl, c: COL.stoneDark, p: [0, 0.16, 0], s: [1.5, 0.32, 1.5] });
+    p.push({ g: P.cyl, c: l >= 2 ? COL.marble : COL.stone, p: [0, 0.5, 0], s: [1.9, 0.4, 1.9] });
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * 6.283;
+      p.push({ g: P.box, c: COL.stoneDark, p: [Math.cos(a) * 0.72, 0.71, Math.sin(a) * 0.72], r: [0, -a, 0], s: [0.28, 0.05, 0.07] });
+    }
+    p.push({ g: P.box, c: l >= 3 ? COL.gold : COL.iron, p: [0, 1.0, -0.15], r: [-0.7, 0, 0], s: [0.07, 1.0, 0.5] });
+    return assemble(p);
+  };
+
+  BM.peacock = function (l) {
+    const p = [];
+    plinth(p, 1.3, 0.6);
+    p.push({ g: P.ico, c: 0x2f7a8a, p: [0, 1.1, 0.1], s: [0.5, 0.62, 0.7] });
+    p.push({ g: P.cyl6, c: 0x2f7a8a, p: [0, 1.55, 0.25], r: [0.3, 0, 0], s: [0.22, 0.7, 0.22] });
+    p.push({ g: P.ico, c: 0x2f9ec4, p: [0, 1.92, 0.4], s: [0.3, 0.3, 0.36] });
+    p.push({ g: P.cone5, c: COL.gold, p: [0, 1.9, 0.62], r: [1.57, 0, 0], s: [0.1, 0.24, 0.1] });
+    for (let i = 0; i < 3; i++) p.push({ g: P.cyl4, c: 0x2fb0a0, p: [0, 2.16 + i * 0.04, 0.36 - i * 0.06], r: [-0.3, 0, (i - 1) * 0.4], s: [0.04, 0.28, 0.04] });
+    // the fanned tail, in tiles
+    const fan = 7 + l * 2;
+    for (let i = 0; i < fan; i++) {
+      const t = i / (fan - 1), a = (t - 0.5) * 2.3;
+      const r = 1.5 + (l >= 2 ? 0.4 : 0);
+      p.push({
+        g: P.box, c: i % 2 ? TILE_BLUE : 0x2f9ec4,
+        p: [Math.sin(a) * r * 0.8, 1.0 + Math.cos(a) * r * 0.72, -0.5], r: [0, 0, -a], s: [0.26, r * 1.1, 0.1]
+      });
+      p.push({
+        g: P.ico, c: i % 2 ? COL.gold : 0x8a3f6a,
+        p: [Math.sin(a) * r * 1.3, 1.0 + Math.cos(a) * r * 1.18, -0.46], s: [0.2, 0.24, 0.08]
+      });
+    }
+    return assemble(p);
+  };
+
+  BM.carpetstand = function (l) {
+    const p = [];
+    for (const sx of [-1, 1]) {
+      p.push({ g: P.cyl6, c: COL.woodDark, p: [sx * 0.9, 1.05, 0], s: [0.14, 2.1, 0.14] });
+      p.push({ g: P.box, c: COL.woodDark, p: [sx * 0.9, 0.08, 0], s: [0.4, 0.16, 0.9] });
+    }
+    p.push({ g: P.cyl6, c: COL.wood, p: [0, 2.05, 0], r: [0, 0, 1.57], s: [0.11, 2.1, 0.11] });
+    // the carpet itself: a field of knots in madder red and indigo
+    const rows = 5 + l, cols = 6;
+    const pal = [0x9e2b2b, 0x2f4a7a, 0xc7a24d, 0xe8dcc4, 0x3f6f45];
+    for (let r = 0; r < rows; r++) for (let c2 = 0; c2 < cols; c2++) {
+      const border = (r === 0 || r === rows - 1 || c2 === 0 || c2 === cols - 1);
+      const mid = (r === ((rows / 2) | 0) && c2 === ((cols / 2) | 0));
+      p.push({
+        g: P.box, c: border ? pal[1] : (mid ? pal[2] : pal[(r + c2) % 2 ? 0 : 3]),
+        p: [-0.72 + c2 * 0.29, 1.85 - r * 0.26, 0.06], s: [0.28, 0.25, 0.05]
+      });
+    }
+    if (l >= 2) for (let i = 0; i < 6; i++) p.push({ g: P.box, c: 0xe8dcc4, p: [-0.72 + i * 0.29, 1.85 - rows * 0.26 - 0.08, 0.06], s: [0.05, 0.16, 0.04] });
+    return assemble(p);
+  };
+
+  BM.topiary = function (l) {
+    const p = [];
+    p.push({ g: P.taper(0.75, 1, 8), c: 0xa8663a, p: [0, 0.24, 0], s: [0.8, 0.48, 0.8] });
+    p.push({ g: P.cyl6, c: COL.woodDark, p: [0, 0.66, 0], s: [0.14, 0.5, 0.14] });
+    p.push({ g: P.sph, c: 0x3f7a3c, p: [0, 1.05, 0], s: [0.85, 0.8, 0.85] });
+    if (l >= 2) p.push({ g: P.sph, c: 0x4c8c45, p: [0, 1.62, 0], s: [0.6, 0.56, 0.6] });
+    if (l >= 3) p.push({ g: P.sph, c: 0x3f7a3c, p: [0, 2.05, 0], s: [0.4, 0.38, 0.4] });
+    return assemble(p);
+  };
+
+  BM.birdbath = function (l) {
+    const p = [];
+    p.push({ g: P.cyl, c: COL.stoneDark, p: [0, 0.1, 0], s: [1.1, 0.2, 1.1] });
+    p.push({ g: P.cyl6, c: l >= 2 ? COL.marble : COL.stone, p: [0, 0.62, 0], s: [0.34, 0.9, 0.34] });
+    p.push({ g: P.cyl, c: l >= 2 ? COL.marble : COL.stone, p: [0, 1.14, 0], s: [1.5, 0.22, 1.5] });
+    p.push({ g: P.cyl, c: TILE_BLUE, p: [0, 1.23, 0], s: [1.25, 0.08, 1.25] });
+    p.push({ g: P.cyl, c: WATER_BLUE, glow: true, p: [0, 1.28, 0], s: [1.15, 0.04, 1.15] });
+    if (l >= 2) {
+      // a sparrow on the rim
+      p.push({ g: P.ico, c: 0x8a7a5a, p: [0.55, 1.4, 0.2], s: [0.2, 0.2, 0.28] });
+      p.push({ g: P.ico, c: 0x8a7a5a, p: [0.55, 1.54, 0.3], s: [0.14, 0.14, 0.14] });
+      p.push({ g: P.cone5, c: 0xe8a020, p: [0.55, 1.54, 0.4], r: [1.57, 0, 0], s: [0.05, 0.1, 0.05] });
+    }
+    return assemble(p);
+  };
+
+  BM.brazier = function (l) {
+    const p = [];
+    for (let i = 0; i < 3; i++) {
+      const a = (i / 3) * 6.283;
+      p.push({ g: P.cyl6, c: COL.iron, p: [Math.cos(a) * 0.42, 0.5, Math.sin(a) * 0.42], r: [Math.sin(a) * 0.28, 0, -Math.cos(a) * 0.28], s: [0.11, 1.0, 0.11] });
+    }
+    p.push({ g: P.taper(1, 0.55, 8), c: l >= 2 ? 0xb87333 : COL.iron, p: [0, 1.15, 0], s: [1.3, 0.5, 1.3] });
+    p.push({ g: P.cyl, c: 0x2a2a2a, p: [0, 1.3, 0], s: [1.1, 0.12, 1.1] });
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * 3.14;
+      p.push({ g: P.cyl6, c: COL.woodDark, p: [Math.cos(a) * 0.16, 1.45, Math.sin(a) * 0.16], r: [Math.sin(a) * 0.5, a, Math.cos(a) * 0.5], s: [0.12, 0.55, 0.12] });
+    }
+    p.push({ g: P.cone5, c: 0xff7a1e, glow: true, p: [0, 1.82, 0], s: [0.62, 0.85, 0.62] });
+    p.push({ g: P.cone5, c: 0xffd15c, glow: true, p: [0, 1.72, 0], s: [0.36, 0.6, 0.36] });
+    if (l >= 3) p.push({ g: P.cone5, c: 0xfff0b0, glow: true, p: [0, 1.64, 0], s: [0.2, 0.4, 0.2] });
+    return assemble(p, true);
+  };
+
+  BM.bellarch = function (l) {
+    const p = [];
+    const h = 2.8;
+    for (const sx of [-1, 1]) p.push({ g: P.cyl6, c: COL.wood, p: [sx * 0.8, h / 2, 0], s: [0.17, h, 0.17] });
+    p.push({ g: P.box, c: COL.woodDark, p: [0, h + 0.06, 0], s: [2.1, 0.18, 0.24] });
+    gable(p, 0, h + 0.15, 0, 2.3, 1.1, 0.45, COL.thatch);
+    const n = Math.min(3, l);
+    for (let i = 0; i < n; i++) {
+      const bx = (i - (n - 1) / 2) * 0.62;
+      p.push({ g: P.box, c: 0x8a6034, p: [bx, h - 0.18, 0], s: [0.04, 0.3, 0.04] });
+      p.push({ g: P.taper(0.35, 1, 8), c: COL.gold, p: [bx, h - 0.55, 0], s: [0.44, 0.5, 0.44] });
+      p.push({ g: P.sph, c: 0xb87333, p: [bx, h - 0.84, 0], s: [0.14, 0.16, 0.14] });
+    }
+    return assemble(p);
+  };
+
   M.BUILDERS = BM;
 
   /** main entry: build a building model by definition + level */
@@ -1307,6 +1872,9 @@
   };
 
   M.animal = function (type, tint, scale) {
+    /* the White Div is built at his own scale and animated by the same
+       leg/head rig every other creature uses */
+    if (type === 'div') return M.div();
     const base = ANIM_STYLE[type] || ANIM_STYLE.wolf;
     // a tint lets one model serve several species (wolf vs dire wolf)
     const s = tint ? Object.assign({}, base, { body: tint }) : base;
@@ -1493,6 +2061,16 @@
       case 'food':
         p.push({ g: P.ico, c: 0xd8a05a, p: [0, 0.14, 0], s: [0.34, 0.24, 0.3] });
         break;
+      case 'tar':
+        /* a long-necked tar: two joined bowls, a skin face and a fretted neck */
+        p.push({ g: P.sph, c: 0x6b4a2c, p: [0, 0.06, 0], s: [0.4, 0.34, 0.24] });
+        p.push({ g: P.sph, c: 0x6b4a2c, p: [0, 0.34, 0], s: [0.3, 0.28, 0.2] });
+        p.push({ g: P.sph, c: 0xe8dcc4, p: [0, 0.1, 0.1], s: [0.34, 0.26, 0.1] });
+        p.push({ g: P.box, c: COL.woodDark, p: [0, 0.78, 0], s: [0.1, 0.72, 0.07] });
+        p.push({ g: P.box, c: 0x2a2a2a, p: [0, 1.16, 0], s: [0.13, 0.2, 0.09] });
+        for (const sx of [-1, 1]) p.push({ g: P.cyl4, c: COL.gold, p: [sx * 0.1, 1.18, 0], r: [0, 0, 1.57], s: [0.04, 0.14, 0.04] });
+        p.push({ g: P.box, c: 0xf0e8d0, p: [0, 0.6, 0.05], s: [0.03, 1.1, 0.02] });
+        break;
       default:
         return null;
     }
@@ -1624,6 +2202,203 @@
       p.push({ g: P.box, c: 0xf0e8d8, p: [Math.cos(a) * 0.05, Math.sin(a) * 0.05, -0.42], r: [0, 0, a], s: [0.02, 0.16, 0.22] });
     }
     return assemble(p, true);
+  };
+
+  /* =========================================================
+     MYTH — the Simorgh, the White Div, and the two companions
+     ========================================================= */
+
+  /** سیمرغ: a bird the size of a house, all copper and peacock-blue,
+      with wings that beat and a plume of tail feathers behind her. */
+  M.simorgh = function () {
+    const g = new THREE.Group();
+    const body = 0xb87333, under = 0xd8a05a, jewel = 0x2f7a8a, flame = 0xf0c437;
+
+    const bp = [];
+    bp.push({ g: P.ico, c: body, p: [0, 0, 0], s: [2.2, 2.0, 4.6] });
+    bp.push({ g: P.ico, c: under, p: [0, -0.55, 0.3], s: [1.8, 1.1, 3.6] });
+    // neck and head, held high
+    bp.push({ g: P.cyl6, c: body, p: [0, 1.5, 1.9], r: [0.5, 0, 0], s: [0.85, 2.4, 0.85] });
+    bp.push({ g: P.ico, c: jewel, p: [0, 2.7, 2.85], s: [0.95, 0.95, 1.35] });
+    bp.push({ g: P.cone5, c: flame, p: [0, 2.55, 3.7], r: [1.35, 0, 0], s: [0.34, 0.95, 0.34] });
+    for (const sx of [-1, 1]) bp.push({ g: P.sph, c: flame, glow: true, p: [sx * 0.42, 2.9, 3.15], s: [0.24, 0.26, 0.18] });
+    // the crest
+    for (let i = 0; i < 4; i++) {
+      bp.push({ g: P.cone5, c: i % 2 ? flame : jewel, p: [0, 3.2 + i * 0.06, 2.75 - i * 0.32], r: [-0.5 - i * 0.15, 0, 0], s: [0.14, 0.85, 0.14] });
+    }
+    // legs, tucked but visible
+    for (const sx of [-1, 1]) {
+      bp.push({ g: P.cyl6, c: 0x8a6a3a, p: [sx * 0.7, -1.2, -0.2], r: [0.3, 0, 0], s: [0.3, 1.3, 0.3] });
+      for (let t = -1; t <= 1; t++) bp.push({ g: P.cone5, c: 0x6a5238, p: [sx * 0.7 + t * 0.2, -1.85, 0.35], r: [1.3, 0, 0], s: [0.14, 0.6, 0.14] });
+    }
+    // the long tail plumes
+    for (let i = 0; i < 7; i++) {
+      const t = (i - 3) / 3;
+      bp.push({ g: P.box, c: i % 2 ? jewel : body, p: [t * 1.1, -0.1 + Math.abs(t) * 0.35, -3.6 - Math.abs(t) * 0.3], r: [0.12, t * 0.22, 0], s: [0.34, 0.1, 3.2] });
+      bp.push({ g: P.ico, c: flame, glow: true, p: [t * 1.7, -0.05 + Math.abs(t) * 0.5, -5.2 - Math.abs(t) * 0.4], s: [0.4, 0.12, 0.55] });
+    }
+    g.add(assemble(bp));
+
+    /* wings hinge at the shoulders so they can beat */
+    const wings = [];
+    for (const sx of [-1, 1]) {
+      const wp = [];
+      for (let i = 0; i < 6; i++) {
+        const t = i / 5;
+        wp.push({
+          g: P.box, c: i % 2 ? body : jewel,
+          p: [sx * (0.8 + t * 4.4), -t * 0.5, 0.6 - t * 1.1],
+          r: [0, sx * t * 0.25, sx * -t * 0.22],
+          s: [1.7, 0.16, 3.4 - t * 1.8]
+        });
+      }
+      for (let i = 0; i < 5; i++) {
+        wp.push({ g: P.box, c: flame, p: [sx * (2.0 + i * 0.9), -0.45 - i * 0.1, -1.4 - i * 0.28], r: [0, sx * 0.2, 0], s: [0.7, 0.1, 2.4] });
+      }
+      const w = assemble(wp, true);
+      g.add(w);
+      wings.push(w);
+    }
+    g.userData.wings = wings;
+    g.userData.isSimorgh = true;
+    return g;
+  };
+
+  /** دیو سپید: a chalk-white ogre, horned and chained, three times your height. */
+  /* Everything below is laid out around his hips, which puts the soles of
+     his feet 1.8 under the origin — so the whole rig is lifted by that much
+     and he stands ON the ground instead of shin-deep in it. */
+  const DIV_LIFT = 1.82;
+  M.div = function () {
+    const g = new THREE.Group();
+    const skin = 0xd8d4c8, dark = 0x9a968a, iron = 0x4a4a52, eye = 0xd23b32;
+
+    const bp = [];
+    bp.push({ g: P.ico, c: skin, p: [0, 2.55, 0], s: [2.3, 2.3, 1.7] });            // chest
+    bp.push({ g: P.ico, c: dark, p: [0, 1.55, 0.1], s: [2.0, 1.3, 1.5] });          // gut
+    bp.push({ g: P.box, c: iron, p: [0, 2.4, 0], r: [0, 0, 0.35], s: [2.6, 0.28, 1.8] });  // chains
+    bp.push({ g: P.box, c: iron, p: [0, 2.0, 0], r: [0, 0, -0.3], s: [2.5, 0.24, 1.8] });
+    // head
+    bp.push({ g: P.ico, c: skin, p: [0, 4.15, 0.1], s: [1.35, 1.35, 1.3] });
+    bp.push({ g: P.box, c: dark, p: [0, 3.85, 0.65], s: [0.9, 0.5, 0.5] });
+    for (const sx of [-1, 1]) {
+      bp.push({ g: P.sph, c: eye, glow: true, p: [sx * 0.36, 4.35, 0.6], s: [0.3, 0.26, 0.16] });
+      // horns, curling back
+      for (let i = 0; i < 4; i++) {
+        bp.push({
+          g: P.cone5, c: 0x3a3630,
+          p: [sx * (0.75 + i * 0.24), 4.85 + i * 0.32, -i * 0.28],
+          r: [-0.35 - i * 0.2, 0, sx * (0.4 + i * 0.12)], s: [0.42 - i * 0.06, 0.62, 0.42 - i * 0.06]
+        });
+      }
+      // tusks
+      bp.push({ g: P.cone5, c: 0xe8e2d0, p: [sx * 0.3, 3.75, 0.75], r: [-2.6, 0, 0], s: [0.18, 0.55, 0.18] });
+    }
+    const body = assemble(bp);
+    body.position.y = DIV_LIFT;
+    g.add(body);
+
+    /* arms and legs are separate so he can swing and stride */
+    const limbs = {};
+    const arm = (sx) => {
+      const ap = [];
+      ap.push({ g: P.ico, c: skin, p: [0, -0.9, 0], s: [0.95, 2.2, 0.95] });
+      ap.push({ g: P.ico, c: dark, p: [0, -2.1, 0.15], s: [1.0, 1.5, 1.0] });
+      ap.push({ g: P.ico, c: skin, p: [0, -3.0, 0.2], s: [1.1, 0.9, 1.1] });
+      for (let i = 0; i < 3; i++) ap.push({ g: P.box, c: iron, p: [0, -1.4 - i * 0.45, 0], s: [1.05, 0.16, 1.05] });
+      void sx;
+      const m = assemble(ap, false);
+      return m;
+    };
+    const leg = () => {
+      const lp = [];
+      lp.push({ g: P.ico, c: dark, p: [0, -1.0, 0], s: [1.0, 2.3, 1.0] });
+      lp.push({ g: P.ico, c: skin, p: [0, -2.2, 0.1], s: [0.9, 1.2, 0.9] });
+      lp.push({ g: P.box, c: 0x3a3630, p: [0, -2.85, 0.3], s: [1.0, 0.5, 1.5] });
+      return assemble(lp, false);
+    };
+    limbs.armL = arm(-1); limbs.armL.position.set(-1.9, 3.4 + DIV_LIFT, 0);
+    limbs.armR = arm(1); limbs.armR.position.set(1.9, 3.4 + DIV_LIFT, 0);
+    limbs.legL = leg(); limbs.legL.position.set(-0.85, 1.3 + DIV_LIFT, 0);
+    limbs.legR = leg(); limbs.legR.position.set(0.85, 1.3 + DIV_LIFT, 0);
+    g.add(limbs.armL, limbs.armR, limbs.legL, limbs.legR);
+
+    /* the club: a torn-up tree trunk, held in the right hand */
+    const cp = [];
+    cp.push({ g: P.taper(0.55, 1, 7), c: 0x5e4224, p: [0, -1.6, 0], s: [1.0, 3.4, 1.0] });
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * 6.283;
+      cp.push({ g: P.cone5, c: 0x3a3630, p: [Math.cos(a) * 0.55, -2.6 - (i % 2) * 0.4, Math.sin(a) * 0.55], r: [Math.sin(a) * 1.2, 0, -Math.cos(a) * 1.2], s: [0.28, 0.7, 0.28] });
+    }
+    const club = assemble(cp, false);
+    /* held clear of the turf: any lower and the tip ploughs the ground,
+       which drags his whole silhouette down with it */
+    club.position.set(0, -1.6, 0.45);
+    limbs.armR.add(club);
+
+    /* expose the rig the way the animal stepper expects it, so the shared
+       walk/attack animation drives him with no special case */
+    limbs.legL.userData.phase = 0;
+    limbs.legR.userData.phase = Math.PI;
+    limbs.armL.userData.phase = Math.PI;
+    limbs.armR.userData.phase = 0;
+    g.userData.legs = [limbs.legL, limbs.legR, limbs.armL, limbs.armR];
+    g.userData.head = null;
+    g.userData.limbs = limbs;
+    g.userData.isDiv = true;
+    return g;
+  };
+
+  /** باز شکاری — small, sharp, and folds its wings when perched */
+  M.falcon = function (coat) {
+    const g = new THREE.Group();
+    const c = coat === undefined ? 0x8a6a48 : coat;
+    const bp = [];
+    bp.push({ g: P.ico, c: c, p: [0, 0, 0], s: [0.32, 0.42, 0.62] });
+    bp.push({ g: P.ico, c: 0xe8dcc4, p: [0, -0.08, 0.1], s: [0.26, 0.28, 0.5] });
+    bp.push({ g: P.ico, c: 0x4a4038, p: [0, 0.3, 0.2], s: [0.26, 0.26, 0.3] });
+    bp.push({ g: P.cone5, c: 0xf0c437, p: [0, 0.28, 0.4], r: [1.3, 0, 0], s: [0.1, 0.22, 0.1] });
+    for (const sx of [-1, 1]) bp.push({ g: P.sph, c: 0xf0c437, glow: true, p: [sx * 0.11, 0.36, 0.28], s: [0.09, 0.09, 0.06] });
+    for (let i = 0; i < 4; i++) {
+      const t = (i - 1.5) / 1.5;
+      bp.push({ g: P.box, c: i % 2 ? c : 0x4a4038, p: [t * 0.09, -0.05, -0.55], r: [0.1, t * 0.16, 0], s: [0.09, 0.04, 0.55] });
+    }
+    for (const sx of [-1, 1]) bp.push({ g: P.cyl4, c: 0xf0c437, p: [sx * 0.12, -0.32, 0.05], s: [0.06, 0.28, 0.06] });
+    g.add(assemble(bp, true));
+
+    const wings = [];
+    for (const sx of [-1, 1]) {
+      const wp = [];
+      for (let i = 0; i < 4; i++) {
+        const t = i / 3;
+        wp.push({ g: P.box, c: i % 2 ? c : 0x6a5238, p: [sx * (0.2 + t * 0.55), -t * 0.05, -t * 0.16], r: [0, 0, sx * -t * 0.15], s: [0.3, 0.05, 0.55 - t * 0.2] });
+      }
+      const w = assemble(wp, true);
+      g.add(w);
+      wings.push(w);
+    }
+    g.userData.wings = wings;
+    return g;
+  };
+
+  /** یوزپلنگ ایرانی — a long-legged spotted cat */
+  M.cheetah = function (coat) {
+    const g = M.animal('fox', coat === undefined ? 0xd8b878 : coat, 1);
+    // longer in the leg and leaner than a fox, with a tear-line and spots
+    g.scale.set(1.15, 1.4, 1.5);
+    const sp = [];
+    for (let i = 0; i < 22; i++) {
+      const a = (i / 22) * 6.283 * 2.3;
+      sp.push({
+        g: P.sph, c: 0x2a2018,
+        p: [Math.cos(a) * 0.3, 0.62 + Math.sin(i * 1.7) * 0.2, -0.5 + (i / 22) * 1.2],
+        s: [0.12, 0.1, 0.12]
+      });
+    }
+    const spots = assemble(sp, true);
+    g.add(spots);
+    g.userData.isCheetah = true;
+    return g;
   };
 
   M.selectRing = function (bad) {

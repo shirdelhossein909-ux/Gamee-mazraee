@@ -542,3 +542,50 @@ h3.sec{font-size:13px;color:var(--gold);margin:18px 0 10px;padding-bottom:6px;bo
 }
 .job .jbtns button:hover:not(:disabled){background:var(--green-2);transform:translateY(-2px)}
 .job .jbtns button:disabled{opacity:.3;cursor:not-allowed}
+
+/* ===================== CHRONICLE ===================== */
+.chron-head{
+  font-size:12.5px;color:var(--muted);line-height:1.9;margin-bottom:12px;
+  padding:10px 13px;border-radius:12px;background:rgba(199,162,77,.08);
+  border:1px solid rgba(199,162,77,.3);
+}
+.chron-head b{color:var(--gold)}
+.chron-list{max-height:56vh;overflow-y:auto;padding-left:4px}
+.chron{
+  display:flex;gap:11px;padding:10px 12px;border-radius:12px;margin-bottom:7px;
+  background:rgba(255,255,255,.035);border:1px solid var(--line);
+  border-right:3px solid rgba(255,255,255,.14);
+}
+.chron.good{border-right-color:var(--green-2)}
+.chron.bad{border-right-color:var(--red)}
+.chron.gold{border-right-color:var(--gold)}
+.chron.myth{border-right-color:#b06ad8;background:rgba(176,106,216,.09)}
+.chron .ci{font-size:22px;line-height:1.3;flex:0 0 auto}
+.chron .cb{flex:1;min-width:0}
+.chron .cd{font-size:11px;color:var(--muted);margin-bottom:3px}
+.chron .ct{font-size:13px;line-height:1.95}
+.chron-empty{color:var(--muted);font-size:12.5px;padding:16px;text-align:center}
+
+/* ===================== DREAM ===================== */
+#dream{
+  position:fixed;inset:0;z-index:60;pointer-events:none;display:grid;place-items:center;
+  background:radial-gradient(ellipse at center,rgba(74,32,110,.55),rgba(10,6,24,.92));
+  animation:dreamIn 1.1s ease-out;
+}
+#dream.hidden{display:none}
+#dream .dream-inner{
+  max-width:min(560px,84vw);text-align:center;padding:30px 34px;border-radius:22px;
+  background:rgba(18,10,34,.72);border:1px solid rgba(190,150,240,.35);
+  box-shadow:0 22px 70px rgba(0,0,0,.6);
+}
+#dream .dream-title{
+  font-size:24px;font-weight:800;color:#d9b6ff;margin-bottom:14px;letter-spacing:.5px;
+  text-shadow:0 0 22px rgba(190,120,255,.55);
+}
+#dream .dream-text{font-size:15px;line-height:2.35;color:#efe6ff}
+@keyframes dreamIn{from{opacity:0}to{opacity:1}}
+#dream.fade{animation:dreamOut .9s ease-in forwards}
+@keyframes dreamOut{to{opacity:0}}
+
+/* ===================== MOON ===================== */
+.moon-full{color:var(--gold);text-shadow:0 0 10px rgba(240,196,55,.6)}

@@ -99,7 +99,7 @@
 
     <!-- taming a wild horse (hold E) -->
     <div id="taming" class="hidden">
-      <div class="tm-name">🐎 <span id="tm-title">—</span></div>
+      <div class="tm-name"><span id="tm-title">—</span></div>
       <div class="tm-track"><i id="tm-fill"></i></div>
       <div class="tm-hint"><kbd>E</kbd> را نگه دار تا طناب بیندازی</div>
     </div>
@@ -121,7 +121,8 @@
         <span><kbd>I</kbd> کوله</span><span><kbd>B</kbd> ساخت</span><span><kbd>M</kbd> بازار</span>
         <span><kbd>K</kbd> مهارت</span><span><kbd>Q</kbd> مأموریت</span><span><kbd>P</kbd> اهالی</span>
         <span><kbd>N</kbd> نقشه</span><span><kbd>J</kbd> وظایف</span><span><kbd>V</kbd> سوار/پیاده</span>
-        <span><kbd>G</kbd> جابه‌جایی ساختمان</span>
+        <span><kbd>G</kbd> جابه‌جایی ساختمان</span><span><kbd>L</kbd> وقایع‌نامه</span>
+        <span><kbd>H</kbd> رها کردن باز/یوز</span>
         <span><kbd>←↑↓→</kbd> چرخش دوربین</span><span><kbd>ESC</kbd> منو</span>
       </div>
     </div>
@@ -141,6 +142,14 @@
     <div class="fish-track"><div class="fish-zone" id="fish-zone"></div><div class="fish-marker" id="fish-marker"></div></div>
     <div class="fish-hint">وقتی نشانگر داخل ناحیه سبز است <kbd>کلیک</kbd> یا <kbd>Space</kbd> بزن</div>
     <div class="fish-tries">تلاش: <span id="fish-tries">3</span></div>
+  </div>
+
+  <!-- ================= DREAM ================= -->
+  <div id="dream" class="hidden">
+    <div class="dream-inner">
+      <div class="dream-title" id="dream-title">خواب دیدی</div>
+      <div class="dream-text" id="dream-text">—</div>
+    </div>
   </div>
 
   <!-- ================= PANELS ================= -->
@@ -227,6 +236,15 @@
         <div id="job-note" style="font-size:12px;color:var(--muted);line-height:1.9;margin-bottom:12px"></div>
         <div id="job-upgrade"></div>
         <div id="job-list"></div>
+      </div>
+    </section>
+
+    <!-- Chronicle -->
+    <section class="panel wide hidden" id="panel-chronicle">
+      <header><h2>📜 وقایع‌نامهٔ کِشتوَر</h2><button class="close">✕</button></header>
+      <div class="panel-body">
+        <div class="chron-head" id="chron-head"></div>
+        <div id="chron-list" class="chron-list"></div>
       </div>
     </section>
 
@@ -357,6 +375,7 @@
 <script src="src/entities/villagers.js"></script>
 <script src="src/entities/vehicles.js"></script>
 <script src="src/entities/horses.js"></script>
+<script src="src/entities/companions.js"></script>
 
 <!-- ================= SYSTEMS ================= -->
 <script src="src/systems/audio.js"></script>
@@ -367,6 +386,9 @@
 <script src="src/systems/building.js"></script>
 <script src="src/systems/economy.js"></script>
 <script src="src/systems/progression.js"></script>
+<script src="src/systems/chronicle.js"></script>
+<script src="src/systems/myth.js"></script>
+<script src="src/systems/disasters.js"></script>
 <script src="src/systems/save.js"></script>
 
 <!-- ================= UI + BOOT ================= -->

@@ -46,6 +46,10 @@
         settlers: game.settlers.serialize(),
         vehicles: game.vehicles.serialize(),
         horses: game.horses.serialize(),
+        companions: game.companions.serialize(),
+        myth: game.myth.serialize(),
+        chronicle: game.chronicle.serialize(),
+        disasters: game.disasters.serialize(),
         markers: game.markers,
         harvested: game.world.harvested,
         economy: { mult: game.economy.mult }
@@ -86,6 +90,10 @@
       game.settlers.deserialize(d.settlers);
       game.vehicles.deserialize(d.vehicles);
       game.horses.deserialize(d.horses);
+      game.companions.deserialize(d.companions);
+      game.myth.deserialize(d.myth);
+      game.chronicle.deserialize(d.chronicle);
+      game.disasters.deserialize(d.disasters);
       game.markers = Array.isArray(d.markers) ? d.markers : [];
       game.markerSeq = game.markers.reduce(function (a, m) { return Math.max(a, m.n || 0); }, 0);
       if (d.farm) game.farming.deserialize(d.farm);

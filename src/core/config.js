@@ -30,8 +30,21 @@
        exactly twice as long as the night. sky.js warps the sun's arc to
        match instead of the plain 12/12 split a raw sine would give. */
     dayStart: 4, dayEnd: 20,
-    dawn: 3.6, sunrise: 4.8, sunset: 19.2, dusk: 20.6
+    dawn: 3.6, sunrise: 4.8, sunset: 19.2, dusk: 20.6,
+    /* The moon runs its own cycle so "the night of the full moon" is a real
+       date you can wait for and plan around, not a random roll. */
+    moonCycle: 8                 // days from one full moon to the next
   };
+  C.MOON_PHASES = [
+    { id: 0, name: 'ماه کامل', icon: '🌕', full: true },
+    { id: 1, name: 'کوژ کاهنده', icon: '🌖', full: false },
+    { id: 2, name: 'نیمه کاهنده', icon: '🌗', full: false },
+    { id: 3, name: 'هلال کاهنده', icon: '🌘', full: false },
+    { id: 4, name: 'ماه نو', icon: '🌑', full: false },
+    { id: 5, name: 'هلال فزاینده', icon: '🌒', full: false },
+    { id: 6, name: 'نیمه فزاینده', icon: '🌓', full: false },
+    { id: 7, name: 'کوژ فزاینده', icon: '🌔', full: false }
+  ];
 
   C.SEASONS = [
     { id: 'spring', name: 'بهار', icon: '🌸', growth: 1.15, rain: 0.32, snow: 0 },
@@ -117,6 +130,27 @@
   item('cheese', 'پنیر', '🧀', 55, 'food', 'بازیابی ۴۰ انرژی');
   item('salad', 'سالاد', '🥗', 38, 'food', 'بازیابی ۳۰ انرژی');
   item('heart_flask', 'شیشهٔ قلب', '❤️', 120, 'food', 'با خوردنش جانت کاملاً پر می‌شود');
+
+  // decoration & ritual goods — bought at the market, spent on beautifying the town
+  item('tile', 'کاشی', '🟦', 26, 'craft', 'کاشی لاجوردی برای حوض و سردر و تزئینات');
+  item('pottery', 'سفال', '🏺', 18, 'craft', 'خمره و گلدان سفالی');
+  item('rug', 'فرش', '🧿', 90, 'craft', 'فرش دست‌باف — زیر پای مهمان و روی دیوار');
+  item('rosewater', 'گلاب', '🌹', 44, 'craft', 'عطر باغ‌های ایرانی');
+  item('saffron', 'زعفران', '🌺', 150, 'craft', 'گران‌ترین ادویهٔ دنیا');
+  item('candle', 'شمع', '🕯️', 12, 'craft', 'برای فانوس‌ها و جشن‌ها');
+  item('esfand', 'اسپند', '🌿', 20, 'craft', 'دود اسپند چشم بد را دور می‌کند — و شاید چیز دیگری را نزدیک');
+  item('bell', 'زنگوله', '🔔', 34, 'craft', 'زنگولهٔ برنجی کاروان');
+
+  // mythology
+  item('simorgh_feather', 'پَر سیمرغ', '🪶', 0, 'craft',
+    'پَری که سیمرغ به تو بخشید. در شهرت بسوزانش تا برکتش بر همه بنشیند. فروختنی نیست.');
+  item('div_heart', 'دل دیو', '🖤', 0, 'craft',
+    'دل سنگی دیو سپید. تا ابد ضربه‌ات را سنگین‌تر می‌کند. فروختنی نیست.');
+  item('relic', 'یادگار کهن', '🗝️', 220, 'craft', 'از دل خاک بیرون آمده. کلکسیونرها بابتش پول خوبی می‌دهند.');
+
+  /* Irreplaceable things. They ignore storage capacity, because losing one
+     to a full backpack would be a bug however you look at it. */
+  C.PRECIOUS = { simorgh_feather: 1, div_heart: 1 };
 
   C.ITEMS = IT;
 
@@ -454,11 +488,97 @@
     effects: (l) => ({ ward: 24 + l * 7, happy: 2 }), hp: (l) => 80 * l
   });
 
+  /* ===================== THE PERSIAN GARDEN =====================
+     Not a workshop and not a warehouse: the prettiest thing you can own.
+     Four quadrants split by water channels around a tiled pool, with
+     cypress, pomegranate and roses. It makes no goods at all — it makes
+     the town somewhere people want to live, and off-duty villagers
+     actually walk over and sit in it. */
+  bld({
+    id: 'garden', name: 'باغ ایرانی', icon: '🌹', cat: 'city', model: 'garden', size: [12, 12], max: 5, tier: 1, sk: 3,
+    desc: 'چهارباغ: چهار قطعه، جوی آب صلیبی، حوض کاشی، سرو و انار و گل سرخ. هیچ محصولی نمی‌دهد — فقط شهرت را جای زندگی می‌کند. اهالی بی‌کار می‌روند آنجا می‌نشینند و خانواده‌ها همان‌جا شکل می‌گیرند.',
+    cost: (l) => Object.assign(scale({ stone: 40, tile: 12, plank: 15, rosewater: 2 }, l, 1.75),
+      { coin: Math.round(300 * Math.pow(1.9, l - 1)) }),
+    effects: (l) => ({ happy: 10 + l * 4, births: 0.05 + l * 0.05, restRadius: 7 + l * 1.5, passable: true })
+  });
+
+  /* ===================== DECORATION =====================
+     Pure beauty. Every piece adds a little happiness, most of them light
+     up at night, and none of them produce anything. Small flat pieces are
+     walkable so a paved square stays a square you can cross. */
+  const dec = (id, name, icon, model, size, price, mats, happy, opt) => bld(Object.assign({
+    id: id, name: name, icon: icon, cat: 'decor', model: model, size: size,
+    max: 3, tier: 0, sk: 0, decor: true,
+    desc: (opt && opt.desc) || 'تزئین شهر.',
+    cost: (l) => Object.assign(scale(mats, l, 1.6), { coin: Math.round(price * Math.pow(1.7, l - 1)) }),
+    effects: (l) => ({ happy: happy * l })
+  }, opt || {}));
+
+  dec('statue', 'مجسمهٔ سنگی', '🗿', 'statue', [2, 2], 90, { stone: 25 }, 3,
+    { desc: 'پیکرهٔ سنگی یک پهلوان بر پایه‌ای بلند.' });
+  dec('horse_statue', 'مجسمهٔ اسب', '🐎', 'horse_statue', [3, 3], 260, { stone: 30, iron: 4 }, 5,
+    { desc: 'اسبی برنزی با یال افشان، بر پایهٔ سنگی.', sk: 2 });
+  dec('lion', 'شیر سنگی', '🦁', 'lion', [3, 2], 200, { stone: 34 }, 4,
+    { desc: 'شیر تخت‌جمشیدی. دو تا بگذار، دو طرف دروازه.', sk: 1 });
+  dec('column', 'ستون تخت‌جمشیدی', '🏛️', 'column', [2, 2], 150, { stone: 28, brick: 4 }, 3,
+    { desc: 'ستون شیاردار با سرستون دوسر گاو.', sk: 1 });
+  dec('archway', 'سردر کاشی', '🕌', 'archway', [5, 2], 320, { brick: 20, tile: 10 }, 6,
+    { desc: 'طاق بلند با کاشی لاجوردی. ورودی شهرت را شکوهمند کن.', sk: 2 });
+  dec('obelisk', 'سنگ یادبود', '🪦', 'obelisk', [2, 2], 120, { stone: 22 }, 2,
+    { desc: 'سنگ بلند یادبود، با کتیبه‌ای که کسی نمی‌خواندش.' });
+  dec('urn', 'خمرهٔ سفالی', '🏺', 'urn', [1, 1], 40, { pottery: 3 }, 1,
+    { desc: 'خمرهٔ بزرگ گلی، همان که سرش را با پارچه می‌بندند.' });
+  dec('flowerbed', 'باغچهٔ گل', '🌷', 'flowerbed', [2, 2], 45, { fiber: 8, clay: 5 }, 2,
+    { desc: 'یک تکه باغچهٔ پرگل. از رویش رد می‌شوی.', walkOver: true });
+  dec('rosebush', 'بوتهٔ رز', '🌹', 'rosebush', [1, 1], 35, { fiber: 5 }, 1,
+    { desc: 'گل سرخ محمدی، همان که گلاب از آن می‌گیرند.' });
+  dec('cypress', 'سرو', '🌲', 'cypress', [2, 2], 70, { fiber: 6, clay: 4 }, 2,
+    { desc: 'سرو بلند و راست — نماد پایداری.' });
+  dec('pomegranate', 'درخت انار', '🍎', 'pomegranate', [2, 2], 85, { fiber: 6, clay: 4 }, 2,
+    { desc: 'درخت انار پرثمر. شب یلدا بی این نمی‌شود.' });
+  dec('pool', 'حوض کاشی', '💧', 'pool', [4, 4], 240, { stone: 25, tile: 10 }, 5,
+    { desc: 'حوض کم‌عمق با کف لاجوردی که آسمان را برمی‌گرداند.', sk: 1 });
+  dec('channel', 'جوی آب', '〰️', 'channel', [2, 2], 30, { stone: 8, tile: 2 }, 1,
+    { desc: 'یک قطعه جوی سنگی. پشت‌سرهم بگذار تا آب در شهر راه بیفتد.', walkOver: true });
+  dec('cascade', 'آبنمای پلکانی', '🌊', 'cascade', [3, 3], 300, { stone: 30, tile: 8 }, 6,
+    { desc: 'آب از سه پله پایین می‌ریزد و صدایش تا آخر میدان می‌آید.', sk: 2 });
+  dec('bench', 'نیمکت چوبی', '🪑', 'bench', [2, 1], 30, { plank: 4 }, 1,
+    { desc: 'جایی برای نشستن و تماشای غروب.' });
+  dec('gazebo', 'آلاچیق', '⛱️', 'gazebo', [4, 4], 280, { plank: 18, cloth: 6 }, 6,
+    { desc: 'سایه‌بان هشت‌ضلعی با سقف پارچه‌ای و نیمکت دور تا دور.', sk: 2, passable: true });
+  dec('swing', 'تاب', '🎠', 'swing', [2, 3], 90, { wood: 12, fiber: 6 }, 3,
+    { desc: 'تاب چوبی. باد که می‌آید خودش تکان می‌خورد.' });
+  dec('hanglamp', 'فانوس آویز', '🏮', 'hanglamp', [1, 1], 55, { iron: 1, candle: 2 }, 2,
+    { desc: 'فانوس رنگی روی پایهٔ خمیده. شب‌ها روشن می‌شود.' });
+  dec('torch', 'مشعل', '🔦', 'torch', [1, 1], 35, { wood: 4, coal: 2 }, 1,
+    { desc: 'مشعل ساده روی تیرک. نور گرمی می‌دهد.' });
+  dec('banner', 'پرچم قبیله', '🚩', 'banner', [1, 1], 60, { cloth: 3, wood: 5 }, 2,
+    { desc: 'پرچم بلند کِشتوَر که در باد تکان می‌خورد.' });
+  dec('signpost', 'تیرک راهنما', '🪧', 'signpost', [1, 1], 25, { wood: 5 }, 1,
+    { desc: 'تیرکی با چند تختهٔ جهت‌نما.' });
+  dec('paving', 'سنگفرش', '⬜', 'paving', [2, 2], 20, { stone: 6 }, 1,
+    { desc: 'یک قطعه سنگفرش. پشت‌سرهم بگذار تا میدان و خیابان بسازی.', walkOver: true });
+  dec('sundial', 'ساعت آفتابی', '🕰️', 'sundial', [2, 2], 170, { stone: 16, iron: 2 }, 3,
+    { desc: 'سایهٔ میله روی حلقهٔ سنگی ساعت را می‌گوید.', sk: 1 });
+  dec('peacock', 'طاووس سنگی', '🦚', 'peacock', [2, 2], 210, { stone: 18, tile: 6 }, 4,
+    { desc: 'طاووسی با دم کاشی‌کاری‌شده.', sk: 2 });
+  dec('carpetstand', 'رَخت فرش', '🧿', 'carpetstand', [2, 2], 190, { rug: 1, wood: 8 }, 4,
+    { desc: 'فرش دست‌باف روی چوب‌بست، رو به گذر.' });
+  dec('topiary', 'بوتهٔ آراسته', '🌳', 'topiary', [1, 1], 50, { fiber: 6 }, 1,
+    { desc: 'بوته‌ای که باغبان به شکل کره درش آورده.' });
+  dec('birdbath', 'آبخوری پرندگان', '🐦', 'birdbath', [2, 2], 75, { stone: 12, tile: 2 }, 2,
+    { desc: 'کاسهٔ سنگی آب. گنجشک‌ها عاشقش‌اند.' });
+  dec('brazier', 'منقل مسی', '🔥', 'brazier', [2, 2], 110, { iron: 3, coal: 4 }, 3,
+    { desc: 'منقل بزرگ مسی روی سه‌پایه. شب که می‌شود گُر می‌گیرد.' });
+  dec('bellarch', 'زنگولهٔ کاروان', '🔔', 'bellarch', [2, 2], 130, { bell: 1, wood: 8 }, 3,
+    { desc: 'زنگولهٔ برنجی زیر طاقی چوبی. باد که بیاید صدا می‌دهد.' });
+
   C.BUILD_CATS = [
     { id: 'farm', name: '🌾 مزرعه' },
     { id: 'home', name: '🏠 مسکونی' },
     { id: 'prod', name: '🏭 تولیدی' },
     { id: 'city', name: '🏛️ شهری' },
+    { id: 'decor', name: '✨ تزئینات' },
     { id: 'def', name: '🛡️ دفاعی' },
     { id: 'crew', name: '👷 کارگرها' }
   ];
@@ -514,6 +634,11 @@
     id: 'warden', name: 'نگهبان جنگی', icon: '🛡️', job: 'guard', expert: true,
     desc: 'گران اما ارزشش را دارد: شب‌ها جلوی گله‌های مهاجم می‌ایستد.',
     cost: (n) => ({ coin: hireCost(2400, 1.5)(n), iron: 12 + n * 4, plank: 10 + n * 3 })
+  });
+  crew({
+    id: 'minstrel', name: 'نوازنده', icon: '🎼', job: 'music', expert: true,
+    desc: 'تارنواز دوره‌گرد. در میدان می‌نشیند و می‌نوازد؛ آهنگ شهر عوض می‌شود و مردم سرحال می‌آیند.',
+    cost: (n) => ({ coin: hireCost(1100, 1.55)(n), cloth: 4 + n * 2, plank: 6 + n * 2 })
   });
 
   /* ===================== HORSES ===================== */
@@ -591,6 +716,16 @@
       hp: 260, speed: 5.2, dmg: 38, xp: 420, size: 2.1, biomes: ['forest', 'snow', 'rocky'],
       drop: { meat: [9, 14], hide: [5, 8] }, extra: { leather: [2, 4], gem: [0, 1] }, night: 1.8, weight: 0.45,
       minThreat: 4.0
+    },
+    /* دیو سپید — never spawns on his own (weight 0). myth.js wakes him when
+       your settlement is big enough to be worth destroying. */
+    whitediv: {
+      id: 'whitediv', name: 'دیو سپید', icon: '👹', model: 'div', hostile: true,
+      hp: 2600, speed: 4.4, dmg: 46, xp: 4000, size: 1.0,
+      hitR: 2.4, hitY: 4.4, reach: 4.2, aggro: 42,
+      biomes: [], drop: { div_heart: [1, 1], gem: [4, 6], gold: [3, 5], leather: [6, 10] }, extra: {},
+      night: 0, weight: 0,
+      boss: true, always: true, fearless: true
     }
   };
 
@@ -692,8 +827,17 @@
     { id: 'stone', name: 'سنگ‌کاری', icon: '⛏️', desc: 'از صخره‌ها سنگ و زغال و سنگ‌آهن می‌آورد.' },
     { id: 'hunt', name: 'شکارچی', icon: '🏹', desc: 'حیوانات را شکار می‌کند و گوشت و پوست می‌آورد.' },
     { id: 'farm', name: 'کشاورز', icon: '🌾', desc: 'محصولات رسیده را خودش برداشت می‌کند.' },
-    { id: 'guard', name: 'نگهبان', icon: '🛡️', desc: 'با کمان از شهر در برابر حیوانات مهاجم دفاع می‌کند.' }
+    { id: 'guard', name: 'نگهبان', icon: '🛡️', desc: 'با کمان از شهر در برابر حیوانات مهاجم دفاع می‌کند.' },
+    { id: 'music', name: 'نوازنده', icon: '🎼', desc: 'تار می‌زند در میدان شهر. آهنگ بازی کنارش عوض می‌شود و هرکس صدایش را بشنود سرحال می‌آید.' }
   ];
+  /* The musician makes no goods, so their whole worth is the mood they lift
+     and the way the score bends around them. */
+  C.MUSIC_JOB = {
+    radius: 22,               // how far the playing carries
+    happyPerPlayer: 4,        // town happiness for each musician at work
+    energyPerHour: 5,         // stamina a listening villager (or you) recovers
+    restRadius: 9             // idlers drift this close to listen
+  };
   /* In-game hours between one worker's deliveries, before their rate.
      A day is twelve real minutes, so 1.1h is about half a real minute. */
   C.JOB_TICK = 1.1;
@@ -710,6 +854,134 @@
      did and more than selling returns, so coins have to be earned. */
   C.PRICE = { sell: 1.6, buy: 3.4 };
 
+  /* =========================================================
+     MYTHOLOGY
+     Three legends, each with its own way in.
+       سیمرغ  — a rite you perform on purpose, on a night you wait for
+       دیو سپید — an enemy your own success wakes up
+       رؤیا و گنج — something the world gives you while you sleep
+     ========================================================= */
+  C.MYTH = {
+    /* ---- The Simorgh ---- */
+    simorgh: {
+      /* The peak is picked from the seed at world build and pinned to the
+         map from the first minute, so it is a destination you can see long
+         before you know what it is for. */
+      peakSearch: 620,          // world units scanned around origin for the highest ground
+      peakSamples: 40,          // grid resolution of that scan
+      ritualRange: 9,           // how close to the peak the fire has to be
+      fireLevel: 1,             // the fire must be at least this level, and lit
+      offering: { esfand: 3, feather: 5, gem: 1 },
+      arriveTime: 15,           // seconds of circling before she lands
+      circleRadius: 34,
+      circleHeight: 26,
+      /* where she comes to rest: far enough away to see her whole wingspan,
+         and high enough that her feet meet the rock rather than sink into it */
+      landRadius: 11,
+      landHeight: 2.9,
+      scale: 1.5,               // she is about four houses across, wingtip to wingtip
+      landTime: 9,              // how long she stays on the peak
+      /* the blessing, once you burn the feather in your own town */
+      blessDays: 3,             // days the blessing keeps working
+      blessGrowth: 2.2,         // crop growth multiplier while blessed
+      blessHappy: 100,          // everyone sits at full contentment
+      cooldownDays: 12          // days before she will answer the rite again
+    },
+
+    /* ---- The White Div ---- */
+    div: {
+      tier: 4,                  // wakes when your settlement becomes a شهر
+      warnDays: 1,              // days of warning between the omen and the attack
+      hp: 2600,
+      speed: 4.4,
+      dmg: 46,
+      reach: 4.2,
+      size: 3.4,
+      xp: 4000,
+      coin: 3000,
+      /* phases fire as his health crosses these fractions */
+      summonAt: 0.66, summonPack: 4,
+      rageAt: 0.33, rageSpeed: 1.45, rageDmg: 1.4,
+      throwRange: 30, throwEvery: 4.5, throwDmg: 30,
+      drop: { div_heart: 1, gem: 6, gold: 4, leather: 8 },
+      /* what the heart is worth once you carry it home */
+      heartPower: 0.2,          // permanent +20% damage
+      returnDays: 30            // he can rise again this many days later
+    },
+
+    /* ---- Dreams & buried treasure ---- */
+    dream: {
+      chancePerNight: 0.22,     // rolled at first light
+      minDay: 3,
+      minDist: 40, maxDist: 190,
+      digRange: 3.2,
+      /* what comes out of the hole */
+      loot: [
+        { coin: [120, 400], w: 40 },
+        { coin: [60, 180], items: { relic: 1 }, w: 24 },
+        { coin: [40, 120], items: { gem: [1, 2] }, w: 18 },
+        { coin: [200, 700], items: { gold: [1, 3] }, w: 11 },
+        { coin: [300, 900], items: { relic: 1, gem: [2, 4], saffron: 2 }, w: 7 }
+      ]
+    }
+  };
+
+  /* =========================================================
+     COMPANIONS — the falcon and the cheetah
+     The same rope-and-patience idea as the horse, but these two hunt
+     with you instead of carrying you.
+     ========================================================= */
+  C.COMPANION = {
+    falcon: {
+      id: 'falcon', name: 'باز شکاری', icon: '🦅', model: 'falcon',
+      desc: 'روی بازویت می‌نشیند. با کلید H رهایش کن تا شیرجه بزند و شکار بیاورد.',
+      biomes: ['rocky', 'snow', 'desert', 'savanna'],
+      tameTime: 3.4, tameRange: 5.0, spookRange: 3.0,
+      bait: { meat: 1 },        // you hold a piece of meat out
+      skill: 'combat', skillLevel: 2,
+      max: 3,
+      hunt: { range: 34, dmg: 26, travel: 22, cooldown: 9 },
+      perch: [0.42, 1.42, -0.05],   // where it sits on your shoulder
+      coats: [0x8a6a48, 0x6a5238, 0xa08a68, 0x4a4038]
+    },
+    cheetah: {
+      id: 'cheetah', name: 'یوزپلنگ ایرانی', icon: '🐆', model: 'cheetah',
+      desc: 'کمیاب‌ترین جانور این سرزمین. رام که شد کنارت می‌دود و به هر مهاجمی حمله می‌کند.',
+      biomes: ['savanna', 'desert', 'plains'],
+      tameTime: 6.5, tameRange: 4.2, spookRange: 5.5,
+      bait: { meat: 3 },
+      skill: 'combat', skillLevel: 5,
+      max: 2,
+      hunt: { range: 26, dmg: 42, travel: 13, cooldown: 3.4 },
+      follow: 6.5, speed: 11.5,
+      coats: [0xd8b878, 0xc8a868, 0xe0c890]
+    },
+    /* both are rare on purpose: this is the reward for wandering */
+    spawnChance: 0.30,          // rolled when wildlife tries to place something
+    maxWild: 2,
+    releaseKey: 'H'
+  };
+
+  /* =========================================================
+     EARTHQUAKE
+     Rare, loud and expensive. Wood frames flex and survive; stone
+     and brick crack — which is exactly how it goes in real life.
+     ========================================================= */
+  C.QUAKE = {
+    minDay: 12,
+    chancePerDay: 0.045,
+    warn: 3.2,                  // seconds of low rumble before the ground moves
+    duration: 9,
+    shake: 0.42,                // metres of camera displacement at the peak
+    /* damage is a share of each structure's max HP, scaled by material */
+    damage: [0.12, 0.40],
+    material: { wood: 0.55, stone: 1.35, brick: 1.5, other: 1.0 },
+    /* what it does besides break things */
+    putOutFires: 0.5,           // chance a lit fire is scattered
+    exposeOre: 3,               // fresh veins shaken loose near the town
+    quietDays: 8                // never twice inside this many days
+  };
+
   /* ===================== STARTING STATE ===================== */
   C.START = {
     coins: 120,
@@ -724,6 +996,28 @@
     reach: 5.5, height: 1.8,
     keyLook: 2.1                  // radians/sec of camera turn from the arrow keys
   };
+
+  /* Every cost key has to name a real item (or coin), otherwise the build
+     is quietly unaffordable forever and nothing says why. Cheap to check
+     once at load; impossible to spot by eye across 60-odd definitions. */
+  (function auditCosts() {
+    const bad = [];
+    for (const id in B) {
+      for (let l = 1; l <= (B[id].max || 1); l++) {
+        const c = B[id].cost(l);
+        for (const k in c) {
+          if (k !== 'coin' && !IT[k]) bad.push(id + '.' + k);
+        }
+      }
+    }
+    for (const id in C.CREW) {
+      const c = C.CREW[id].cost(0);
+      for (const k in c) if (k !== 'coin' && !IT[k]) bad.push('crew:' + id + '.' + k);
+    }
+    if (bad.length && typeof console !== 'undefined') {
+      console.error('config: costs name unknown items — ' + bad.join(', '));
+    }
+  })();
 
   G.Config = C;
 })(window.GAME = window.GAME || {});

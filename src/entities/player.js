@@ -458,6 +458,10 @@
       this.camLook.z = U.damp(this.camLook.z, this.pos.z, 34, dt);
     }
     cam.position.copy(this.camPos);
+    /* an earthquake moves the lens, not the world — cheaper, and it reads
+       exactly the same from behind the player's shoulder */
+    const q = this.game.disasters ? this.game.disasters.shakeOffset() : null;
+    if (q) cam.position.x += q.x, cam.position.y += q.y, cam.position.z += q.z;
     cam.lookAt(this.camLook);
   };
 

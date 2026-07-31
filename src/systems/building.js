@@ -96,6 +96,9 @@
 
   function ghostly(b, forPlayer) {
     if (b.def.id === 'lamp') return true;
+    /* paving, flower beds and water channels lie flat: a paved square has
+       to stay a square you can walk across */
+    if (b.def.walkOver) return true;
     if (!forPlayer) return false;
     const eff = b.def.effects ? b.def.effects(b.level) : {};
     return !!eff.passable;

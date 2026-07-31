@@ -203,6 +203,8 @@
     const dh = dt * hoursPerSec;
     const season = C.SEASONS[this.game.time.season];
     const rain = this.game.sky.rainAmount();
+    /* while the Simorgh's blessing holds, everything comes on in a rush */
+    const bless = (this.game.myth && this.game.myth.blessed()) ? C.MYTH.simorgh.blessGrowth : 1;
 
     this.plots.forEach((plot) => {
       if (rain > 0) plot.moisture = Math.min(1, plot.moisture + dh * rain * 0.5);
@@ -210,7 +212,7 @@
 
       if (plot.crop && plot.stage < 3) {
         const def = C.CROPS[plot.crop];
-        const mul = season.growth * (plot.moisture > 0.2 ? 1.6 : 1);
+        const mul = season.growth * (plot.moisture > 0.2 ? 1.6 : 1) * bless;
         plot.growth += dh * mul;
         const st = Math.min(3, Math.floor((plot.growth / def.growH) * 4));
         if (st !== plot.stage) {

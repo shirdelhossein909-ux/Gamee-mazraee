@@ -8,6 +8,11 @@
   const U = G.Utils, C = G.Config, M = G.Meshes;
   const W = C.WORLD;
 
+  /* Aim volume around a creature. Ordinary animals derive it from their
+     scale; anything built at its own scale (the White Div) states it. */
+  function hitR(def) { return def.hitR || (0.75 * def.size + 0.35); }
+  function hitY(def) { return def.hitY === undefined ? def.size * 0.6 : def.hitY; }
+
   function Wildlife(game) {
     this.game = game;
     this.animals = [];
@@ -24,6 +29,8 @@
      species turn up, and how many of them. A starting farm scores ~0.2. */
   Wildlife.prototype.threat = function () {
     const g = this.game, T = C.THREAT;
+    /* while the Simorgh's blessing holds, nothing comes near the town */
+    if (g.myth && g.myth.blessed()) return 0;
     const b = g.building ? g.building.list.length : 0;
     const pop = g.progress ? g.progress.population : 0;
     const tier = g.progress ? g.progress.tier : 0;
@@ -51,7 +58,10 @@
     for (let i = this.animals.length - 1; i >= 0; i--) {
       const a = this.animals[i];
       this._stepAnimal(a, dt, p);
-      if (a.dead || U.dist2(a.x, a.z, p.pos.x, p.pos.z) > 165 * 165) this._despawn(i);
+      /* a boss is not something you can walk away from — he stays loaded
+         until he falls or the myth system calls the hunt off */
+      const far = a.def.boss ? 420 : 165;
+      if (a.dead || U.dist2(a.x, a.z, p.pos.x, p.pos.z) > far * far) this._despawn(i);
     }
     this._stepArrows(dt);
   };
@@ -133,10 +143,11 @@
 
     /* Daylight is safe: predators ignore you completely unless you struck
        first. After dark they hunt, and the bolder they get the bigger the
-       settlement is. */
-    const hostile = (def.hostile && night) || a.angry;
+       settlement is. A legend (`always`) keeps no such hours. */
+    const awake = def.always || night;
+    const hostile = (def.hostile && awake) || a.angry;
     const threat = this._threatCache;
-    const aggro = (def.hostile && night ? 20 + threat * 2.5 : 0) + (a.angry ? 20 : 0);
+    const aggro = (def.hostile && awake ? (def.aggro || 20) + threat * 2.5 : 0) + (a.angry ? 20 : 0);
 
     /* ---- pick a state ---- */
     if (hostile && pd < aggro && !this._playerSafe(player)) {
@@ -150,8 +161,9 @@
     }
 
     /* A burning fire drives predators back out of its circle — they will not
-       press an attack, raid a wall, or even hold their ground inside it. */
-    const fire = (def.hostile || def.thief || a.angry) && this.game.building
+       press an attack, raid a wall, or even hold their ground inside it.
+       The White Div walks through fire; that is rather the point of him. */
+    const fire = (def.hostile || def.thief || a.angry) && !def.fearless && this.game.building
       ? this.game.building.wardedAt(a.x, a.z) : null;
     if (fire) {
       a.state = 'shy';
@@ -171,7 +183,7 @@
     switch (a.state) {
       case 'chase':
         wantX = pdx; wantZ = pdz; speed *= 1.0;
-        if (pd < 1.9 + def.size && a.attackCd <= 0) {
+        if (pd < 1.9 + (def.reach || def.size) && a.attackCd <= 0) {
           a.attackCd = 1.25;
           if (player.damage(def.dmg, a.x, a.z)) {
             this.game.audio.beast(def.size > 1.2);
@@ -317,7 +329,7 @@
       const dx = a.x - srcX, dz = a.z - srcZ, l = Math.hypot(dx, dz) || 1;
       a.x += (dx / l) * 0.55; a.z += (dz / l) * 0.55;
     }
-    this.game.fx.hitBurst(a.x, a.y + a.def.size * 0.6, a.z, 0xd83a3a, 8);
+    this.game.fx.hitBurst(a.x, a.y + hitY(a.def), a.z, 0xd83a3a, 8);
     this.game.audio.hit();
     if (a.hp <= 0) {
       this._kill(a);
@@ -370,8 +382,8 @@
     let best = null, bt = maxDist;
     for (const a of this.animals) {
       if (a.dead) continue;
-      const r = 0.75 * a.def.size + 0.35;
-      const ox = a.x - origin.x, oy = (a.y + a.def.size * 0.6) - origin.y, oz = a.z - origin.z;
+      const r = hitR(a.def);
+      const ox = a.x - origin.x, oy = (a.y + hitY(a.def)) - origin.y, oz = a.z - origin.z;
       const t = ox * dir.x + oy * dir.y + oz * dir.z;
       if (t < 0 || t > bt) continue;
       const cx = ox - dir.x * t, cy = oy - dir.y * t, cz = oz - dir.z * t;
@@ -406,8 +418,8 @@
       let hitA = null;
       for (const a of this.animals) {
         if (a.dead) continue;
-        const r = 0.8 * a.def.size + 0.4;
-        if (U.dist2(nx, nz, a.x, a.z) < r * r && Math.abs(ny - (a.y + a.def.size * 0.6)) < r * 1.6) { hitA = a; break; }
+        const r = hitR(a.def) + 0.05;
+        if (U.dist2(nx, nz, a.x, a.z) < r * r && Math.abs(ny - (a.y + hitY(a.def))) < r * 1.6) { hitA = a; break; }
       }
       if (hitA) {
         this.hit(hitA, ar.dmg, p.x, p.z);

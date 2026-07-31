@@ -206,9 +206,16 @@
     this.villagers = new G.Villagers(this);
     this.vehicles = new G.Vehicles(this);
     this.horses = new G.Horses(this);
+    this.companions = new G.Companions(this);
     this.economy = new G.Economy(this);
     this.gather = new G.Gathering(this);
+    /* the chronicle listens to the bus, so it has to exist before anything
+       worth recording happens */
+    this.chronicle = new G.Chronicle(this);
+    this.myth = new G.Myth(this);
+    this.disasters = new G.Disasters(this);
     this.ui = new G.UI(this);
+    this.myth.findPeak();
 
     const self = this;
     this.bus.on('item', function () { self.ui.dirtyRes = true; self.ui.dirtyHot = true; });
@@ -255,6 +262,8 @@
     if (this.villagers) this.villagers.clear();
     if (this.vehicles) this.vehicles.clear();
     if (this.horses) this.horses.clear();
+    if (this.companions) this.companions.clear();
+    if (this.myth) this.myth.clear();
     if (this.settlers) this.settlers.clear();
     if (this.audio) this.audio.engineStop();
     if (this.building) {
@@ -333,6 +342,7 @@
     if (IN.pressed('KeyP')) ui.openPanel('people');
     if (IN.pressed('KeyN')) ui.toggleMap();
     if (IN.pressed('KeyJ')) ui.openPanel('jobs');
+    if (IN.pressed('KeyL')) ui.openPanel('chronicle');
     if (IN.pressed('Escape')) {
       if (this.ui.map && this.ui.map.open) this.ui.closeMap();
       else if (this.building.placing) this.building.cancel();
@@ -396,20 +406,31 @@
         this.gather.use(ui.currentTool());
       }
     }
-    /* Interact. A wild horse in arm's reach turns E into a hold — you keep it
-       down while the rope goes on. Everything else still fires the instant the
-       key goes down, so no interaction ever feels laggy. */
+    /* H: loose the falcon / set the cheetah on whatever you are looking at */
+    if (IN.gpressed('KeyH') && !this.building.placing) this.companions.release();
+
+    /* Interact. A wild horse — or a falcon or cheetah — in arm's reach turns
+       E into a hold: you keep it down while the rope goes on or the bird
+       settles. Everything else still fires the instant the key goes down, so
+       no interaction ever feels laggy. */
     const p = this.player.pos;
-    const wildHorse = !this.building.placing && !this.player.mount &&
-      this.horses.nearestWild(p.x, p.z, C.HORSE.tameRange);
+    const busy = this.building.placing || this.player.mount;
+    const wildHorse = !busy && this.horses.nearestWild(p.x, p.z, C.HORSE.tameRange);
+    const wildPet = !busy && !wildHorse && this.companions.nearestWild(p.x, p.z);
     if (IN.gpressed('KeyE')) {
       if (this.building.placing) this.building.confirm();
-      else if (wildHorse) this._taming = true;
-      else this.gather.interact();
+      else if (wildHorse) { this._taming = 'horse'; }
+      else if (wildPet) { this._taming = 'pet'; }
+      /* the three legends answer E too — the peak rite and digging up a
+         dream both happen here, before ordinary gathering gets a look in */
+      else if (!this.myth.interact()) this.gather.interact();
     }
-    if (this._taming) {
+    if (this._taming === 'horse') {
       if (IN.down('KeyE') && wildHorse) this.horses.holdTame(dt);
-      else { this.horses.cancelTame(); this._taming = false; }
+      else { this.horses.cancelTame(); this._taming = null; }
+    } else if (this._taming === 'pet') {
+      if (IN.down('KeyE') && wildPet) this.companions.holdTame(dt);
+      else { this.companions.cancelTame(); this._taming = null; }
     }
   };
 
@@ -442,6 +463,8 @@
 
     this.vehicles.update(dt);
     this.horses.update(dt);
+    this.companions.update(dt);
+    this.disasters.update(dt);
     this.player.update(dt);
     this.world.update(dt, this.player.pos.x, this.player.pos.z, this._lateFrame);
     this.sky.update(dt, this.player.pos);
@@ -451,6 +474,7 @@
     this.farming.update(dt);
     this.building.update(dt);
     this.progress.update(dt);
+    this.myth.update(dt);
 
     if (!this.building.placing) this.gather.pickTarget();
     this.gather.update(dt);

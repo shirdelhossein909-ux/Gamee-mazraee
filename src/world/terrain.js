@@ -415,6 +415,21 @@
     this.nodes.set(id, node);
   };
 
+  /* Drop a node into the world at runtime, outside the usual chunk pass —
+     an earthquake shaking fresh veins out of the ground, say. It lands in
+     whichever chunk is loaded there, so it streams and disposes like any
+     other prop. Returns the node, or null if that chunk is not resident. */
+  World.prototype.spawnNode = function (kind, type, x, z) {
+    const chunk = this.chunks.get(this.chunkKeyOf(x, z));
+    if (!chunk) return null;
+    const y = this.heightAt(x, z);
+    const idx = 900000 + (this._extraSeq = (this._extraSeq || 0) + 1);
+    const rnd = U.rng(U.strSeed('q' + Math.round(x * 8) + '_' + Math.round(z * 8) + '_' + idx));
+    const before = chunk.nodes.length;
+    this._addNode(chunk, kind, type, x, y, z, idx, rnd, this.game.time ? this.game.time.day : 0);
+    return chunk.nodes.length > before ? chunk.nodes[chunk.nodes.length - 1] : null;
+  };
+
   World.prototype.removeNode = function (node, respawnDays) {
     const ch = this.chunks.get(node.chunk);
     if (ch) {

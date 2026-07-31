@@ -7,12 +7,16 @@
 
   const U = G.Utils, C = G.Config;
 
-  /* what the trader is willing to sell you */
+  /* What the trader is willing to sell you. The bottom half is the stall
+     of small beautiful things — tiles, pottery, rosewater, saffron — that
+     the decoration you build is made out of. */
   const BUYABLE = [
     'seed_wheat', 'seed_carrot', 'seed_potato', 'seed_corn', 'seed_tomato',
     'seed_pumpkin', 'seed_melon', 'seed_grape',
     'wood', 'stone', 'clay', 'fiber', 'coal', 'plank', 'brick', 'cloth', 'iron',
-    'bread', 'heart_flask'
+    'leather', 'flour', 'wool',
+    'bread', 'cheese', 'jam', 'salad', 'stew', 'heart_flask',
+    'tile', 'pottery', 'candle', 'bell', 'rosewater', 'rug', 'saffron', 'esfand'
   ];
 
   function Economy(game) {
@@ -92,8 +96,16 @@
     return true;
   };
 
+  /* A relic of the Simorgh or the Div has no price. Guarding it here as
+     well as in the UI means no bulk-sell can ever take it by accident. */
+  Economy.prototype.tradable = function (id) {
+    const it = C.ITEMS[id];
+    return !!it && it.value > 0;
+  };
+
   Economy.prototype.sell = function (id, qty) {
     const g = this.game;
+    if (!this.tradable(id)) { g.ui.toast('این را نمی‌شود فروخت', 'bad'); return false; }
     qty = Math.min(qty || 1, g.inv.count(id));
     if (qty <= 0) return false;
     const total = this.sellPrice(id) * qty;
@@ -111,6 +123,7 @@
     let total = 0, n = 0;
     for (const row of g.inv.list()) {
       if (cats && cats.indexOf(row.def.cat) < 0) continue;
+      if (!this.tradable(row.id)) continue;
       total += this.sellPrice(row.id) * row.n;
       n += row.n;
       g.inv.remove(row.id, row.n);
