@@ -94,22 +94,25 @@
 
   const BLOCK_PAD = 0.35;               // how wide a body the collision test assumes
 
-  function ghostly(b, forPlayer) {
+  /* `friendly` means anything that belongs to the town: you, your people,
+     your horses, your falcon. A gate opens for all of them and for none of
+     the wolves — which is the whole point of owning one. */
+  function ghostly(b, friendly) {
     if (b.def.id === 'lamp') return true;
     /* paving, flower beds and water channels lie flat: a paved square has
        to stay a square you can walk across */
     if (b.def.walkOver) return true;
-    if (!forPlayer) return false;
+    if (!friendly) return false;
     const eff = b.def.effects ? b.def.effects(b.level) : {};
     return !!eff.passable;
   }
 
-  /** does something solid stand here? gates let the player through */
-  Building.prototype.blocks = function (x, z, forPlayer) {
+  /** does something solid stand here? gates let your own side through */
+  Building.prototype.blocks = function (x, z, friendly) {
     const arr = this._at(x, z);
     if (!arr) return false;
     for (const b of arr) {
-      if (ghostly(b, forPlayer)) continue;
+      if (ghostly(b, friendly)) continue;
       if (inside(b, x, z, BLOCK_PAD)) return true;
     }
     return false;
@@ -264,20 +267,50 @@
     return m;
   };
 
+  /* A gateway is two cells wide, so unlike a wall piece it cannot simply
+     grow arms in four directions — it has to turn to face the run it sits
+     in. Work out which way that is, and only take the new orientation if
+     the wider footprint actually fits there. */
+  Building.prototype._gateFacing = function (b, mask) {
+    const alongX = (mask & 3) ? true : (mask & 12) ? false : null;
+    if (alongX === null) return b.rot;                  // standing alone: keep yours
+    const want = alongX ? 0 : Math.PI / 2;
+    if (Math.abs(U.angleDelta(b.rot, want)) < 0.01) return b.rot;
+    const fp = footprint(b.def, want);
+    /* would the turned footprint land on anything? */
+    for (const o of this.list) {
+      if (o === b) continue;
+      if (Math.abs(o.x - b.x) < (o.w + fp.w) / 2 - 0.15 &&
+        Math.abs(o.z - b.z) < (o.d + fp.d) / 2 - 0.15) {
+        if (!o.def.connects) return b.rot;              // a wall neighbour is fine
+      }
+    }
+    return want;
+  };
+
   Building.prototype._reshapeWall = function (b) {
     const mask = this.wallMaskAt(b.x, b.z, b);
-    if (b.mask === mask) return;
+    const gate = !!b.def.gateway;
+    const rot = gate ? this._gateFacing(b, mask) : 0;
+    if (b.mask === mask && (!gate || b.rot === rot)) return;
     b.mask = mask;
+    if (gate && b.rot !== rot) {
+      const fp = footprint(b.def, rot);
+      this._index(b, false);
+      b.rot = rot; b.w = fp.w; b.d = fp.d;
+      this._index(b, true);
+    }
     this.group.remove(b.obj);
     disposeTree(b.obj);
     b.obj = M.building(b.defId, b.level, mask, b.variant);
     b.obj.position.set(b.x, b.y, b.z);
-    b.obj.rotation.y = 0;                       // shape comes from the mask
+    b.obj.rotation.y = gate ? b.rot : 0;        // a wall's shape comes from the mask
     this.group.add(b.obj);
     b.glow = [];
     b.obj.traverse(function (o) {
       if (o.userData && o.userData.isGlow) { o.material = M.MAT.window; b.glow.push(o); }
     });
+    b.leaves = b.obj.userData.leaves || null;
     b.h = measureHeight(b.obj);
   };
 
@@ -546,6 +579,8 @@
     obj.traverse(function (o) {
       if (o.userData && o.userData.isGlow) { o.material = fire ? M.MAT.glow : M.MAT.window; b.glow.push(o); }
     });
+    b.leaves = obj.userData.leaves || null;
+    b.gateOpen = 0;
     b.h = measureHeight(obj);
     if (fire) {
       b.fuel = this.fireRate(b) * 3;      // arrives with a few logs already burning
@@ -824,6 +859,40 @@
     return false;
   };
 
+  /* Anyone on the town's side, close enough to want through. Checked
+     against the gate rather than the player, so a farmhand coming home at
+     dusk opens it the same as you do. */
+  Building.prototype._friendlyNear = function (x, z, r) {
+    const g = this.game;
+    const r2 = r * r;
+    if (g.player && U.dist2(x, z, g.player.pos.x, g.player.pos.z) < r2) return true;
+    if (g.villagers) for (const v of g.villagers.list) if (U.dist2(x, z, v.x, v.z) < r2) return true;
+    if (g.horses) for (const h of g.horses.list) if (!h.stabled && U.dist2(x, z, h.x, h.z) < r2) return true;
+    if (g.companions) for (const c of g.companions.list) {
+      if (c.tame && !c.perched && U.dist2(x, z, c.x, c.z) < r2) return true;
+    }
+    if (g.settlers && g.settlers.riders) {
+      for (const rd of g.settlers.riders) if (rd.obj && U.dist2(x, z, rd.x, rd.z) < r2) return true;
+    }
+    return false;
+  };
+
+  Building.prototype._swingGate = function (b, dt) {
+    const want = this._friendlyNear(b.x, b.z, C.GATE.openRange) ? 1 : 0;
+    const step = dt * C.GATE.speed;
+    if (b.gateOpen === undefined) b.gateOpen = 0;
+    if (b.gateOpen < want) b.gateOpen = Math.min(want, b.gateOpen + step);
+    else if (b.gateOpen > want) b.gateOpen = Math.max(want, b.gateOpen - step);
+    /* ease so the leaves settle rather than snap */
+    const e = b.gateOpen * b.gateOpen * (3 - 2 * b.gateOpen);
+    b.leaves[0].rotation.y = e * C.GATE.swing;
+    b.leaves[1].rotation.y = -e * C.GATE.swing;
+    if (b.gateOpen > 0.02 && b.gateOpen < 0.98 && !b._creak) {
+      b._creak = 1;
+      if (this.game.audio) this.game.audio.gate();
+    } else if (b.gateOpen <= 0.02 || b.gateOpen >= 0.98) b._creak = 0;
+  };
+
   /* =========================================================
      PER-FRAME
      ========================================================= */
@@ -836,6 +905,8 @@
     M.MAT.window.opacity = nightF;
 
     for (const b of this.list) {
+      /* a gate swings for its own side and stays shut against the rest */
+      if (b.leaves) this._swingGate(b, dt);
       /* animated parts */
       const spin = b.obj.userData.spin;
       if (spin) {

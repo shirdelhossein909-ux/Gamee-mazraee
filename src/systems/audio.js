@@ -637,6 +637,13 @@
     }, 700);
   };
 
+  /** heavy timber on iron hinges */
+  A.gate = function () {
+    this.burst({ freq: 320, to: 120, dur: 0.9, gain: 0.16, q: 2.6, filter: 'bandpass' });
+    this.tone({ freq: 190, to: 128, type: 'sawtooth', dur: 0.8, gain: 0.09, attack: 0.06, filter: 'lowpass', cutoff: 620 });
+    this.tone({ freq: 74, to: 52, type: 'sine', dur: 1.1, gain: 0.14, attack: 0.12 });
+  };
+
   /* =========================================================
      MYTH & DISASTER
      ========================================================= */

@@ -448,12 +448,23 @@
     cost: (l) => scale({ stone: 8, brick: 2 }, l, 2.2),
     effects: (l) => ({ defense: 2 * l * C.WALL_MUL, block: true }), hp: (l) => 140 * l * C.WALL_MUL
   });
+  /* A city gate should look like the front door of a city. This one spans
+     two wall cells, carries two towers and a battlemented arch, and its two
+     leaves swing open for anyone who belongs here — you, your people, your
+     horses, your falcon — and stay shut against everything else. */
   bld({
-    id: 'gate', name: 'دروازه', icon: '🚪', cat: 'def', model: 'gate', size: [2, 2], connects: true, max: 3, tier: 1, sk: 2,
-    desc: 'از آن رد می‌شوی ولی حیوانات نه.',
-    cost: (l) => scale({ wood: 12, iron: 2 }, l),
-    effects: (l) => ({ defense: l * C.WALL_MUL, block: true, passable: true }), hp: (l) => 100 * l * C.WALL_MUL
+    id: 'gate', name: 'دروازهٔ شهر', icon: '🏯', cat: 'def', model: 'gatehouse', size: [4, 2],
+    connects: true, gateway: true, max: 3, tier: 1, sk: 2,
+    desc: 'دروازهٔ بزرگ دو لنگه با دو برج و طاق کنگره‌دار. خودش برای تو، اهالی، اسب‌ها و همراهانت باز می‌شود و جلوی حیوانات وحشی بسته می‌ماند. خودش هم در جهت دیوار می‌چرخد.',
+    cost: (l) => scale({ wood: 26, stone: 20, iron: 6 }, l),
+    effects: (l) => ({ defense: l * C.WALL_MUL * 2, block: true, passable: true }), hp: (l) => 220 * l * C.WALL_MUL
   });
+  /* how the leaves behave */
+  C.GATE = {
+    openRange: 7.5,       // a friendly this close swings it open
+    speed: 2.6,           // radians a second on the hinge
+    swing: 1.95           // how far each leaf opens
+  };
   bld({
     id: 'guard_tower', name: 'برج نگهبانی', icon: '🗼', cat: 'def', model: 'tower', size: [3, 3], max: 5, tier: 1, sk: 3,
     desc: 'به حیوانات مهاجم نزدیک تیر می‌زند. برد و آسیبش با سطح زیاد می‌شود.',
@@ -851,6 +862,22 @@
   /* In-game hours between one worker's deliveries, before their rate.
      A day is twelve real minutes, so 1.1h is about half a real minute. */
   C.JOB_TICK = 1.1;
+  /* Some trades want their own pace on top of the shared one. */
+  C.JOB_SPEED = { farm: 4 };
+
+  /* ===================== FARMHANDS =====================
+     A farmhand runs the whole field on their own: they sow, they water,
+     they harvest, and when the seed bin runs dry they walk to the market
+     and buy more out of your purse. All you have to do is break the
+     ground — deciding where the field goes stays your call. */
+  C.FARMER = {
+    buySeeds: true,
+    batch: 8,             // seeds bought at a time
+    purseShare: 0.35,     // never spend more than this much of your coin at once
+    reserve: 60,          // and always leave you at least this many coins
+    restockGap: 6,        // seconds between shopping trips, so they don't spam it
+    waterTo: 0.95         // how wet they leave a plot
+  };
   /* Throughput is split between swinging faster and carrying more, so a
      busy worker looks busy instead of frantic.
        plain hand : TICK_MUL 2 x YIELD_MUL 1.75  = 3.5x the old rate

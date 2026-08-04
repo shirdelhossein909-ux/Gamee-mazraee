@@ -239,6 +239,9 @@
 
   Game.prototype._begin = function () {
     this.started = true;
+    /* your graphics and audio choices belong to you, not to this world —
+       put them back the way you left them */
+    G.Settings.apply(this);
     document.getElementById('hud').classList.remove('hidden');
     this.ui.dirtyRes = true;
     this.ui.dirtyHot = true;
@@ -334,6 +337,17 @@
   /* =========================================================
      INPUT
      ========================================================= */
+  /* The strip of ploughed ground you are looking at — the crosshair first,
+     then whatever is under your feet, so editing a field is as forgiving as
+     working one. */
+  Game.prototype._plotUnderAim = function () {
+    const t = this.gather.target;
+    if (t && t.kind === 'plot' && !t.tooFar) return t.plot;
+    const p = this.player.pos;
+    const f = this.player.frontPoint(2.2);
+    return this.farming.plotAt(f.x, f.z) || this.farming.nearestPlot(p.x, p.z, 3.2);
+  };
+
   Game.prototype._input = function (dt) {
     const IN = G.Input, ui = this.ui;
 
@@ -350,15 +364,25 @@
     if (IN.pressed('Escape')) {
       if (this.ui.map && this.ui.map.open) this.ui.closeMap();
       else if (this.building.placing) this.building.cancel();
+      else if (this.farming.moving) this.farming.cancelMove();
       else if (ui.anyPanelOpen()) ui.closePanel();
       else ui.openPanel('menu');
     }
     if (IN.pressed('KeyF')) { if (IN.locked) IN.unlock(); else IN.lock(); }
-    /* G: grab whatever you are looking at and move it */
-    if (IN.gpressed('KeyG') && !this.building.placing) {
+    /* G: grab whatever you are looking at and move it — a building, or a
+       strip of ploughed ground you would rather have somewhere else */
+    if (IN.gpressed('KeyG') && !this.building.placing && !this.farming.moving) {
       const t = this.gather.target;
+      const plot = this._plotUnderAim();
       if (t && t.kind === 'building') this.building.startMove(t.building);
-      else ui.toast('🔀 اول به ساختمانی که می‌خواهی جابه‌جا کنی نگاه کن', 'bad');
+      else if (plot) this.farming.startMove(plot);
+      else ui.toast('🔀 اول به ساختمان یا زمینی که می‌خواهی جابه‌جا کنی نگاه کن', 'bad');
+    }
+    /* X: clear a strip of ploughed ground away */
+    if (IN.gpressed('KeyX') && !this.building.placing && !this.farming.moving) {
+      const plot = this._plotUnderAim();
+      if (plot) this.farming.clear(plot);
+      else ui.toast('🪏 اول به زمین کشاورزی نگاه کن', 'bad');
     }
     if (IN.gpressed('KeyV') && !this.building.placing) {
       /* one key for every saddle: horse first, then boat or car */
@@ -396,7 +420,8 @@
 
     /* left click */
     if (IN.clicked(0)) {
-      if (this.building.placing) this.building.confirm();
+      if (this.farming.moving) this.farming.confirmMove();
+      else if (this.building.placing) this.building.confirm();
       else if (this.player.mount) {
         /* One hand on the reins is enough for a blade, a bow or a bite —
            hunting from the saddle is half the point of having a horse. */
@@ -476,6 +501,7 @@
     this.villagers.update(dt);
     this.settlers.update(dt);
     this.farming.update(dt);
+    if (this.farming.moving) this.farming.updateMove();
     this.building.update(dt);
     this.progress.update(dt);
     this.myth.update(dt);

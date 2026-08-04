@@ -100,23 +100,30 @@
       self.game.restart(null, (Math.random() * 1e9) | 0);
     };
 
-    // settings
-    $('set-quality').onchange = function () { self.game.setQuality(this.value); };
-    $('set-view').oninput = function () { self.game.setViewRadius(+this.value); };
-    $('set-sens').oninput = function () { G.Input.sensitivity = +this.value; };
-    $('set-shadow').onchange = function () { self.game.setShadows(this.checked); };
+    /* Settings. Every one of these is written straight back to
+       localStorage, so what you set stays set — through a new world, a
+       reload, and closing the game. */
+    const ST = G.Settings;
+    $('set-quality').onchange = function () { self.game.setQuality(this.value); ST.set('quality', this.value); };
+    $('set-view').oninput = function () { self.game.setViewRadius(+this.value); ST.set('view', +this.value); };
+    $('set-sens').oninput = function () { G.Input.sensitivity = +this.value; ST.set('sens', +this.value); };
+    $('set-shadow').onchange = function () { self.game.setShadows(this.checked); ST.set('shadow', this.checked); };
 
     // audio
     const vol = function (id, bus) {
       const el = $(id);
       if (!el) return;
-      el.oninput = function () { self.game.audio.setVolume(bus, +this.value); };
+      el.oninput = function () { self.game.audio.setVolume(bus, +this.value); ST.setVolume(bus, +this.value); };
     };
     vol('set-vol-master', 'master');
     vol('set-vol-music', 'music');
     vol('set-vol-amb', 'ambient');
     vol('set-vol-sfx', 'sfx');
-    if ($('set-sound')) $('set-sound').onchange = function () { self.game.audio.setEnabled(this.checked); };
+    if ($('set-sound')) $('set-sound').onchange = function () {
+      self.game.audio.setEnabled(this.checked);
+      ST.set('sound', this.checked);
+    };
+    ST.syncControls();
 
     // collapsible key-hint drawer
     const wrap = $('keyhints-wrap');

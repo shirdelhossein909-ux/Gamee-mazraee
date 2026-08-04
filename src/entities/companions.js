@@ -281,7 +281,7 @@
          footprint it is flying *over* stopped it ever reaching your arm in
          a built-up town — it was shoved back once per frame. */
       if (g.building && c.kind !== 'falcon') {
-        const esc = g.building.escapeFrom(c.x, c.z, 0.25, false);
+        const esc = g.building.escapeFrom(c.x, c.z, 0.25, true);
         if (esc) { c.x = esc.x; c.z = esc.z; c.y = world.heightAt(c.x, c.z); }
       }
       if (c.state === 'hunt') this._stepHunt(c, dt, world);
@@ -369,7 +369,7 @@
        arm through a built-up town leaves it stuck against the first house. */
     const airborne = c.kind === 'falcon' && (fly || c.tame);
     const blocked = !airborne && (nh < W.waterLevel + 0.15 || Math.abs(nh - (c.y - this._lift(c))) > 2.2 ||
-      (this.game.building && this.game.building.blocks(nx, nz, false)));
+      (this.game.building && this.game.building.blocks(nx, nz, true)));
     if (blocked) { c.timer = 0; c.wanderYaw = Math.random() * 6.283; c.moving = false; }
     else { c.x = nx; c.z = nz; c.moving = true; }
     const target = airborne ? nh + 5.5 : this._restY(c, world);

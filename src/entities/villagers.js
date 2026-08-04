@@ -79,6 +79,7 @@
 
     for (const v of this.list) {
       v.mul = v.horse ? 2.3 : 1;                  // a rider covers ground faster
+      v.shopCd = Math.max(0, (v.shopCd || 0) - dt);
       if (v.skip) for (const k in v.skip) { if ((v.skip[k] -= dt) <= 0) delete v.skip[k]; }
       v.think -= dt;
       if (v.think <= 0) {
@@ -130,8 +131,10 @@
       let moving = false;
 
       if (v.working) {
-        /* standing at the work site — an expert swings faster too */
-        const tickMul = C.WORKER.tickMul * (v.expert ? C.EXPERT.tickMul : 1);
+        /* standing at the work site — an expert swings faster too, and a
+           trade with its own pace (a farmhand) gets that on top */
+        const tickMul = C.WORKER.tickMul * (v.expert ? C.EXPERT.tickMul : 1) *
+          (C.JOB_SPEED[v.job] || 1);
         v.workT += hours * tickMul;
         v.swing = (v.swing || 0) - dt;
         if (v.swing <= 0) { v.swing = 0.75 / tickMul; v.swingAnim = 1; }
@@ -141,7 +144,7 @@
         if (this._tryStep(v, dx / d, dz / d, step, world)) {
           moving = true;
           v.stuckT = 0;
-        } else if (!v.detour && (v.stuckT = (v.stuckT || 0) + dt) > 0.4 &&
+        } else if (!v.detour && (v.stuckT || 0) + dt > 0.4 &&
           this._detour(v, dx / d, dz / d, world)) {
           /* boxed in against something long — go round it */
           v.stuckT = 0;
@@ -153,15 +156,25 @@
              have a turn at a different one. */
           v.stuckT = (v.stuckT || 0) + dt;
           if (v.stuckT > STUCK_GIVEUP) {
-            v.stuckT = 0;
-            this._giveUp(v);
+            /* no step and no way round: lift them onto walkable ground
+               before writing the target off, so a pinned worker cannot
+               quietly blacklist the whole field */
+            if (!this._unstick(v, dx / d, dz / d, world)) {
+              v.stuckT = 0;
+              this._giveUp(v);
+            }
           }
           v.think = Math.min(v.think, 0.35);
         }
         v.yaw += U.angleDelta(v.yaw, Math.atan2(dx, dz)) * Math.min(1, dt * 8);
-      } else if (v.job !== 'idle' && v.hasTarget) {
+      } else if (v.job !== 'idle' && v.hasTarget && !v.detour) {
         v.working = true;                      // arrived — get to work
         v.stuckT = 0;
+        /* got here in the end, so this target is not a lost cause after all */
+        if (v.fails) {
+          const id = v.node ? v.node.id : (v.plot ? 'p' + v.plot.gx + ',' + v.plot.gz : null);
+          if (id !== null) delete v.fails[id];
+        }
       }
 
       /* guards and hunters shoot rather than walk into a bear's jaws */
@@ -252,18 +265,25 @@
      argued with. */
   Villagers.prototype._detour = function (v, dirX, dirZ, world) {
     const g = this.game;
-    const open = (x, z) => world.heightAt(x, z) > C.WORLD.waterLevel + 0.2 &&
-      !(g.building && g.building.blocks(x, z, true));
+    /* The same test a step uses, including the climb limit — offering a
+       detour up a cliff face is worse than offering none, because the
+       walker commits to it and then stands there for six seconds. */
+    const open = (x, z, fromY) => {
+      const h = world.heightAt(x, z);
+      return h > C.WORLD.waterLevel + 0.2 && Math.abs(h - fromY) < 1.7 &&
+        !(g.building && g.building.blocks(x, z, true));
+    };
     const px = -dirZ, pz = dirX;                    // perpendicular to the blockage
     const first = v.detourSide || 1;
     for (const dist of [7, 12, 18, 26]) {
       for (const side of [first, -first]) {
         const x = v.x + px * side * dist + dirX * 2;
         const z = v.z + pz * side * dist + dirZ * 2;
-        if (!open(x, z)) continue;
-        let clear = true;
-        for (let t = 0.15; t <= 1.001; t += 0.15) {
-          if (!open(v.x + (x - v.x) * t, v.z + (z - v.z) * t)) { clear = false; break; }
+        let clear = true, lastY = v.y;
+        for (let t = 0.12; t <= 1.001; t += 0.12) {
+          const sx = v.x + (x - v.x) * t, sz = v.z + (z - v.z) * t;
+          if (!open(sx, sz, lastY)) { clear = false; break; }
+          lastY = world.heightAt(sx, sz);
         }
         if (!clear) continue;
         v.detour = { x: x, z: z, t: 6 };
@@ -274,12 +294,56 @@
     return false;
   };
 
-  /** write off the current target and go find another */
+  /* The last resort, and the one that can never deadlock: a worker who has
+     been unable to move for a long time is lifted onto the nearest walkable
+     ground in the direction they were trying to go. Nothing else guarantees
+     progress — a villager pinned between a cliff and a wall has no step and
+     no detour, and used to stand there drifting until the job was abandoned.
+     The game already relocates people when you build on top of them; this is
+     the same courtesy. */
+  Villagers.prototype._unstick = function (v, dirX, dirZ, world) {
+    const g = this.game;
+    const ok = (x, z) => {
+      const h = world.heightAt(x, z);
+      return h > C.WORLD.waterLevel + 0.3 && !(g.building && g.building.blocks(x, z, true));
+    };
+    for (const ahead of [6, 12, 20, 30]) {
+      const cx = v.x + dirX * ahead, cz = v.z + dirZ * ahead;
+      for (let r = 0; r <= 6; r += 1.5) {
+        const n = r < 0.1 ? 1 : 10;
+        for (let a = 0; a < n; a++) {
+          const ang = (a / n) * 6.283;
+          const x = cx + Math.cos(ang) * r, z = cz + Math.sin(ang) * r;
+          if (!ok(x, z)) continue;
+          v.x = x; v.z = z; v.y = world.heightAt(x, z);
+          v.detour = null; v.stuckT = 0;
+          return true;
+        }
+      }
+    }
+    return false;
+  };
+
+  /* Write off the current target and go find another — but escalate rather
+     than slam the door. Being blocked once is usually a passing thing (a
+     neighbour in the way, a corner taken badly); a vein halfway up a cliff
+     fails every time. So the first couple of failures earn a short cool-off
+     and only a persistent one gets the long ban.
+
+     This matters most on a farm: four hands sharing twenty-one rows used to
+     blacklist the entire field inside a minute and then stand around, which
+     looked exactly like farmhands that do not work. */
+  const GIVEUP_STEPS = [5, 14, SKIP_FOR];
   Villagers.prototype._giveUp = function (v) {
     if (!v.skip) v.skip = Object.create(null);
+    if (!v.fails) v.fails = Object.create(null);
     const id = v.node ? v.node.id : (v.plot ? 'p' + v.plot.gx + ',' + v.plot.gz : null);
-    if (id !== null) v.skip[id] = SKIP_FOR;
+    if (id !== null) {
+      const n = (v.fails[id] = (v.fails[id] || 0) + 1);
+      v.skip[id] = GIVEUP_STEPS[Math.min(n - 1, GIVEUP_STEPS.length - 1)];
+    }
     v.node = null; v.plot = null; v.prey = null;
+    v.detour = null;
     v.hasTarget = false;
     v.working = false;
     v.think = 0;
@@ -336,7 +400,10 @@
       case 'wood':
       case 'stone': return !!(v.node && g.world.nodes.has(v.node.id));
       case 'hunt': return !!(v.prey && !v.prey.dead);
-      case 'farm': return !!(v.plot && v.plot.crop && v.plot.stage >= 3);
+      /* A farmhand stays on the row they walked out to until they have
+         done something to it. Only counting a *ripe* plot as valid sent
+         them back to the job board mid-stride on every watering. */
+      case 'farm': return !!(v.plot && this.game.farming.plots.has(U.key(v.plot.gx, v.plot.gz)));
       /* a guard sticks with the thing they were sent after, until it falls */
       case 'guard': return !!(v.foe && !v.foe.dead && this.game.wildlife.animals.indexOf(v.foe) >= 0);
       /* a player stays put: as long as there is somewhere to play, the
@@ -548,21 +615,103 @@
   /* What is there to do on the farm? Ripe crops first, then thirsty ones,
      then bare tilled soil waiting on seed — a farmhand who only ever
      harvested looked broken on a field that was still growing. */
+  /* ===================== FARMHANDS =====================
+     A farmhand runs the field on their own. All they need from you is
+     ground that has been broken; after that they sow, water and harvest,
+     and when the seed bin is empty they go and buy more with your coin. */
+
+  /** every crop this town's farming skill is allowed to plant */
+  Villagers.prototype._unlockedCrops = function () {
+    const lvl = this.game.progress.skill('farming').level;
+    const out = [];
+    for (const id in C.CROPS) if (C.CROPS[id].lvl <= lvl) out.push(C.CROPS[id]);
+    return out;
+  };
+
+  /** a seed already in the store that a farmhand may plant */
+  Villagers.prototype._seedInStock = function () {
+    const inv = this.game.inv;
+    const crops = this._unlockedCrops();
+    /* prefer the seed you have picked for yourself, then the most valuable
+       thing there is enough of — a field of grapes beats a field of wheat */
+    if (inv.selectedSeed && inv.count(inv.selectedSeed) > 0) {
+      for (const c of crops) if (c.seed === inv.selectedSeed) return c.seed;
+    }
+    let best = null, bv = -1;
+    for (const c of crops) {
+      if (inv.count(c.seed) <= 0) continue;
+      const v = C.ITEMS[c.id].value;
+      if (v > bv) { bv = v; best = c.seed; }
+    }
+    return best;
+  };
+
+  /** what a farmhand could afford to go and buy, if the bin is empty */
+  Villagers.prototype._seedToBuy = function () {
+    const g = this.game;
+    if (!C.FARMER.buySeeds) return null;
+    const purse = g.inv.coins - C.FARMER.reserve;
+    if (purse <= 0) return null;
+    const budget = Math.min(purse, g.inv.coins * C.FARMER.purseShare);
+    let best = null, bv = -1;
+    for (const c of this._unlockedCrops()) {
+      const unit = g.economy.buyPrice(c.seed);
+      if (unit <= 0 || unit > budget) continue;
+      const v = C.ITEMS[c.id].value;
+      if (v > bv) { bv = v; best = { seed: c.seed, unit: unit, crop: c }; }
+    }
+    return best;
+  };
+
+  /** is there any way at all for this farmhand to put a seed in the ground? */
+  Villagers.prototype._canSeed = function () {
+    return !!(this._seedInStock() || this._seedToBuy());
+  };
+
+  /** the market run: buy a batch out of your purse */
+  Villagers.prototype._restockSeeds = function (v) {
+    const g = this.game;
+    if (v.shopCd > 0) return null;
+    const pick = this._seedToBuy();
+    if (!pick) { v.shopCd = C.FARMER.restockGap; return null; }
+    const budget = Math.min(g.inv.coins - C.FARMER.reserve, g.inv.coins * C.FARMER.purseShare);
+    const n = Math.max(1, Math.min(C.FARMER.batch, Math.floor(budget / pick.unit)));
+    v.shopCd = C.FARMER.restockGap;
+    const before = g.inv.count(pick.seed);
+    const bought = g.economy.buy(pick.seed, n);
+    const got = g.inv.count(pick.seed) - before;
+    if (got <= 0) {
+      /* A full store swallows the purchase and the farmhand looks idle for
+         no visible reason. Say which of the two problems it actually is. */
+      if (!this._shopWarn || U.now() - this._shopWarn > 25000) {
+        this._shopWarn = U.now();
+        g.ui.toast(bought
+          ? '📦 انبار پر است — بذری که کشاورزها خریدند جا نشد. سیلو یا انبار بساز.'
+          : '🌱 کشاورزها نتوانستند بذر بخرند — سکه یا جای انبار کم است', 'bad');
+      }
+      return null;
+    }
+    g.ui.toast('🌾 کشاورزها ' + U.fa(got) + ' بذر ' + pick.crop.name + ' از بازار خریدند', 'good');
+    return pick.seed;
+  };
+
   Villagers.prototype._farmJob = function (v) {
-    const f = this.game.farming, inv = this.game.inv;
+    const f = this.game.farming;
     const skip = v.skip;
     let best = null, bd = 1e9, bestRank = 9;
-    const hasSeed = inv.selectedSeed && inv.count(inv.selectedSeed) > 0;
+    /* sowing is only worth walking to if a seed can be had — in the bin
+       or at the market */
+    const canSow = this._canSeed();
     f.plots.forEach(function (p) {
       const id = 'p' + p.gx + ',' + p.gz;
       if (skip && skip[id] > 0) return;
       let rank;
       if (p.crop && p.stage >= 3) rank = 0;                 // harvest
       else if (p.crop && p.moisture < 0.3) rank = 1;        // water
-      else if (!p.crop && hasSeed) rank = 2;                // sow
+      else if (!p.crop && canSow) rank = 2;                 // sow
       else return;
       const d = U.dist2(v.x, v.z, p.x, p.z);
-      if (d > 90 * 90) return;
+      if (d > 120 * 120) return;
       if (rank < bestRank || (rank === bestRank && d < bd)) { bestRank = rank; bd = d; best = p; }
     });
     if (best) v.farmAct = bestRank;
@@ -603,7 +752,7 @@
         return;                              // _hunt() shoots; the kill drops the meat
       case 'farm': {
         const p = v.plot;
-        if (!p) { v.think = 0; v.working = false; return; }
+        if (!p || !g.farming.plots.has(U.key(p.gx, p.gz))) { v.think = 0; v.working = false; return; }
         if (p.crop && p.stage >= 3) {
           const crop = p.crop;
           g.farming.harvest(p);
@@ -612,12 +761,33 @@
             const bonus = Math.round((load - 1) * 1.5);
             if (bonus > 0) g.inv.add(crop, bonus, true);
           }
-        }
-        else if (p.crop && p.moisture < 0.3) {
+        } else if (p.crop && p.moisture < 0.3) {
           /* the farmhand carries their own water — no bucket errands */
-          p.moisture = Math.min(1, p.moisture + 0.85);
-        } else if (!p.crop && g.inv.selectedSeed && g.inv.count(g.inv.selectedSeed) > 0) {
-          g.farming.plant(p, g.inv.selectedSeed);
+          p.moisture = Math.min(1, p.moisture + C.FARMER.waterTo);
+          g.farming._refreshSoil(p);
+        } else if (!p.crop) {
+          /* Sow. If the seed bin is empty they go and buy some out of your
+             purse — that is the whole point of hiring one. */
+          let seed = this._seedInStock();
+          if (!seed) seed = this._restockSeeds(v);
+          if (seed) {
+            /* Two hands can reach for the last seed in the bin at once. That
+               is a moment's bad luck, not a reason to write the row off for
+               a minute — come back to it shortly. */
+            if (!g.farming.plant(p, seed)) {
+              if (!v.skip) v.skip = Object.create(null);
+              v.skip['p' + p.gx + ',' + p.gz] = 3;
+            }
+          } else {
+            /* nothing to plant and nothing to buy: leave this row alone
+               for a while rather than pacing back to it every few seconds */
+            if (!v.skip) v.skip = Object.create(null);
+            v.skip['p' + p.gx + ',' + p.gz] = 20;
+            if (!this._seedWarn || U.now() - this._seedWarn > 30000) {
+              this._seedWarn = U.now();
+              g.ui.toast('🌱 کشاورزها نه بذر دارند نه پول بذر — سکه یا بذر بگذار', 'bad');
+            }
+          }
         }
         v.think = 0; v.working = false;
         return;

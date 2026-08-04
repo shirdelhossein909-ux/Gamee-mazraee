@@ -336,7 +336,7 @@
          used to trap it for good. Its own stall is the one place it is
          allowed to stand inside a structure. */
       if (g.building && !(h.stabled && h.home)) {
-        const esc = g.building.escapeFrom(h.x, h.z, 0.4, false);
+        const esc = g.building.escapeFrom(h.x, h.z, 0.4, true);
         if (esc) { h.x = esc.x; h.z = esc.z; h.y = world.heightAt(h.x, h.z); }
       }
       if (h === this.mounted) { this._ride(h, dt); continue; }
@@ -415,8 +415,11 @@
     const nh = world.heightAt(nx, nz);
     /* A horse heading for its own box walks in through the stable door —
        the hall is solid to everything else. */
+    /* A horse is one of yours: it walks through your own gate, down your
+       own stable aisle and across your own garden, like everything else
+       that belongs to the town. */
     const blocked = nh < W.waterLevel + 0.2 || Math.abs(nh - h.y) > 2.2 ||
-      (!ghost && this.game.building && this.game.building.blocks(nx, nz, false));
+      (!ghost && this.game.building && this.game.building.blocks(nx, nz, true));
     if (blocked) { h.timer = 0; h.wanderYaw = Math.random() * 6.283; h.moving = false; }
     else { h.x = nx; h.z = nz; h.y = nh; h.moving = true; }
     h.yaw += U.angleDelta(h.yaw, Math.atan2(dx, dz)) * Math.min(1, dt * 6);

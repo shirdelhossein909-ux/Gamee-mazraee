@@ -246,7 +246,7 @@ python3 -m http.server 8000      # یا:  npx http-server -p 8000
 | 🪓 چوب‌بری | سراغ نزدیک‌ترین درخت می‌رود و مدام چوب و الیاف به انبار می‌آورد |
 | ⛏️ سنگ‌کاری | سراغ رگه‌های معدن می‌رود: سنگ، زغال‌سنگ، سنگ‌آهن، طلا و جواهر |
 | 🏹 شکارچی | دنبال حیوانات می‌رود و از فاصلهٔ کمانی به آن‌ها تیر می‌زند؛ گوشت و پوست مال توست |
-| 🌾 کشاورز | محصولات رسیده را خودش برداشت می‌کند |
+| 🌾 کشاورز | **کل مزرعه را خودش می‌گرداند** — می‌کارد، آب می‌دهد، برداشت می‌کند و بذر تمام‌شده را با سکهٔ تو از بازار می‌خرد (۴ برابر سریع‌تر) |
 | 🛡️ نگهبان | **سراغ دردسر می‌رود** — هر مهاجمی نزدیک شهر یا هر بنایی که دارد جویده می‌شود، او را از آن سر شهر می‌کشاند |
 | 🎼 نوازنده | در بهترین جای شهر تار می‌زند؛ آهنگ بازی عوض می‌شود و همه سرحال می‌آیند |
 | 🚶 بی‌کار | آزادانه در شهر می‌گردد |
@@ -477,6 +477,75 @@ python3 -m http.server 8000      # یا:  npx http-server -p 8000
 
 ---
 
+### 🏯 دروازهٔ شهر — بزرگ، دو لنگه، و بالاخره باز می‌شود
+دروازه‌ها باز و بسته نمی‌شدند. حالا دروازه **یک بنای واقعی است**، نه یک تختهٔ
+هم‌قد حصار:
+
+* **دو برجِ کنگره‌دار** با تیرکش، پرچم و فانوس، طاقی که وسطش بادبزنی از سنگ
+  چیده شده، و **دو لنگهٔ چوبیِ آهن‌کوب** که هرکدام از لولای خودش باز می‌شود
+* **۹٫۴ متر بلندی** در برابر ۲٫۲ متر دیوار — از آن سر دشت پیداست و می‌گوید
+  اینجا دروازهٔ یک شهر است
+* **خودش باز می‌شود:** هرکس **طرف توست** از ۷٫۵ متری نزدیک شود، لنگه‌ها با شتاب
+  نرم (نه پرش ناگهانی) کنار می‌روند و پشت سرش بسته می‌شوند — **تو، همهٔ اهالی و
+  کارگرها، اسب‌های آزاد، سوارکارها، باز و یوزت**. حیوان وحشی هرگز بازش نمی‌کند و
+  باید از رویش رد شود
+* صدای غژغژ لولا فقط در **لحظهٔ باز و بسته شدن** پخش می‌شود، نه هر فریم
+* مثل بقیهٔ دیوارها **خودش در جهت دیوار می‌چرخد**؛ اگر دیوار کنارش را عوض کنی،
+  دروازه دوباره جهت‌گیری می‌کند و لنگه‌هایش با آن می‌چرخند
+
+### 💀 سطح آخر: استخوانی — یکی مانده به آخر: الماسی
+دیوارها، حصارها و دروازه دیگر فقط بزرگ‌تر نمی‌شوند، **جنسشان عوض می‌شود**:
+
+| سطح | ظاهر |
+|---|---|
+| ۱ | چوب / سنگ معمولی |
+| **یکی مانده به آخر** | 💎 **الماسی** — تیغه‌های شفاف آبی با درخشش سرد، نوک‌های تراش‌خورده |
+| **آخر** | 💀 **استخوانی** — جمجمه روی هر ستون، قفسهٔ دنده بین آن‌ها، چشم‌های سرخِ روشن در تاریکی |
+
+هزینهٔ سه‌بعدی‌اش هم اندازه‌گیری شد تا شهر بزرگ کند نشود: دیوار
+**۱۴۴ ← ۴۷۴ ← ۷۲۶** مثلث، حصار **۶۰ ← ۳۳۹ ← ۶۰۰**.
+
+### ⚙️ تنظیماتت ذخیره می‌شوند
+گرافیک، فاصلهٔ دید، حساسیت ماوس، سایه، صدا و هر پنج لغزندهٔ صدا **در همان
+لحظه‌ای که تغییرشان می‌دهی** ذخیره می‌شوند و دفعهٔ بعد که بازی را باز کنی
+اعمال شده‌اند — جدا از فایل ذخیرهٔ بازی، پس حتی با شروع بازی جدید هم می‌مانند.
+
+### 🌾 کشاورزها — صفر تا صد، خودشان
+«من اصلاً کشاورزی نکردم» — درست بود. کشاورز فقط محصول **رسیده** را برمی‌داشت؛
+اگر خودت نکاشته بودی، تا ابد بی‌کار می‌ماند. حالا کشاورز **کل چرخه را می‌گرداند**:
+
+* **می‌کارد** — هر قطعهٔ خالی‌ات را با بذری که در انبار هست پر می‌کند
+* **آب می‌دهد** — هر قطعهٔ تشنه را تا ۹۵٪ آب می‌رساند
+* **برداشت می‌کند** — و محصول مستقیم می‌رود توی انبار تو
+* **خودش بذر می‌خرد** — بذر که تمام شد، می‌رود بازار و از **سکه‌های خودت**
+  ۸ تا بذر می‌خرد. هیچ‌وقت بیشتر از **۳۵٪ کیسه‌ات** را یک‌جا خرج نمی‌کند و همیشه
+  دست‌کم **۶۰ سکه** برایت باقی می‌گذارد؛ بین دو خرید ۶ ثانیه فاصله می‌اندازد
+* **بذر متنوع می‌خرد** — هر محصولی که سطح مهارتت باز کرده باشد، نه فقط گندم
+* **۴ برابر سریع‌تر** از بقیهٔ شغل‌ها کار می‌کند
+* تا **۱۲۰ متری** شهر دنبال زمین می‌گردد، پس مزرعهٔ دوردست هم بی‌صاحب نمی‌ماند
+
+تنها کاری که برایت می‌ماند: **زمین را بشکاف**. جای مزرعه انتخاب توست، بقیه‌اش نه.
+
+### 🧹 حذف و جابه‌جایی زمین کشاورزی
+* **`X`** روی یک قطعه: پاکش می‌کند. اگر محصول **رسیده** باشد اول برداشتش
+  می‌کند، و اگر **نورس** باشد **نصف بذر** را پس می‌گیری
+* **`G`** روی یک قطعه: بلندش می‌کند و مثل ساختمان روی نشانگر می‌آید — با
+  **کلیک چپ** بگذارش، با **`ESC`** لغو کن. **محصول و مرحلهٔ رشد و آبش با خودش
+  می‌آید**
+
+### 🐛 و یک باگ که می‌توانست کل مزرعه را سفید کند
+پاک کردن یک قطعه، هندسهٔ **مشترکِ کش‌شده** را آزاد می‌کرد — یعنی خاک و بوتهٔ
+**همهٔ** قطعه‌های دیگر هم با آن می‌رفت. حالا فقط خودِ قطعه برداشته می‌شود.
+
+جدا از آن، یک خرابی **یک‌در-چهار** در کارگرها پیدا و رفع شد: کارگری که گیر
+می‌کرد، هدفش را برای ۷۵ ثانیه در فهرست سیاه می‌گذاشت و در چند دقیقه **همهٔ**
+قطعه‌ها را رد می‌کرد و بی‌کار می‌ایستاد. حالا محرومیت **پلکانی** است
+(۵ ← ۱۴ ← ۷۵ ثانیه، و با اولین رسیدنِ موفق صفر می‌شود)، دور زدن **ارتفاع زمین
+را هم حساب می‌کند** (از دیوارهٔ ۱٫۷ متری بالا نمی‌رود)، و کارگری که واقعاً گیر
+کرده باشد با **جست‌وجوی مارپیچی** بیرون کشیده می‌شود. شش اجرای پشت‌سرهم، بی‌خطا.
+
+---
+
 ### 🛡️ نگهبان‌ها — بازنویسی کامل
 نگهبان‌ها کار نمی‌کردند. سه علت جدا داشت و هر سه پیدا و درست شد:
 
@@ -672,6 +741,7 @@ src/systems/
   chronicle.js          وقایع‌نامه: تاریخ شهر به فارسی، با تاریخ درست
   myth.js               سیمرغ و آیین ماه کامل، دیو سپید، رؤیا و گنج
   disasters.js          زلزله: هشدار، لرزش دوربین، آسیب بر اساس جنس بنا
+  settings.js           گرافیک، صدا و حساسیت — ذخیرهٔ جدا از فایل بازی
   save.js               ذخیره/بارگذاری روی localStorage
 
 src/ui/ui.js            HUD، نوار ابزار، پنجره‌ها، نقشهٔ کوچک، پیام‌ها
@@ -803,7 +873,8 @@ the keyboard (click to lock pointer) · `Shift` sprint · `Space`
 jump · left click use tool · `E` interact · `V` mount/dismount vehicle · `1`–`9` or numpad
 hotbar · `R` rotate building / cycle seed · `I` inventory · `B` build · `M` market ·
 `K` skills · `Q` quests · `P` people & vehicles · `J` job board · `N` world map ·
-**`G`** pick a placed building up to move and rotate it · **`L`** the chronicle ·
+**`G`** pick a placed building **or a farm plot** up to move and rotate it ·
+**`X`** clear the farm plot you are looking at · **`L`** the chronicle ·
 **`H`** loose the falcon / set the cheetah on your target · `ESC` menu. Walk into deep
 water to swim. You can attack from horseback.
 
@@ -818,7 +889,32 @@ with `V`, and lead it into a stable — a real ten-stall hall, one horse per roo
 tamed horses walk to their own stall and stand in it. Working villagers borrow them to
 reach distant jobs at twice the speed.
 
-**Latest round — defence:** guards were reported as not working, and it turned out to be
+**Latest round — the gate, and farmhands who actually farm:** the city gate is now a
+building rather than a plank the height of a fence — two battlemented towers with arrow
+slits, banners and lanterns, a stone fan across the arch, and **two iron-bound leaves**
+that swing from their own hinges. It stands 9.4 metres against a wall's 2.2. It **opens
+by itself** for anyone on your side within 7.5 metres — you, every villager and worker,
+loose horses, riders, your falcon and cheetah — and stays shut against anything wild,
+easing open and closed instead of snapping. Walls, fences and the gate now **change
+material** at the top: one level below max they turn **diamond** (translucent blue blades
+with a cold glow), and at max they turn **bone** — a skull on every post, ribs strung
+between them, eye-sockets lit red in the dark. Your **settings persist**: quality, view
+distance, sensitivity, shadows and all five volume sliders save the moment you change
+them, separately from the save file. Farm plots can be **cleared with `X`** (ripe crops
+are harvested first, young ones refund half the seed) and **moved with `G`** like any
+building, carrying their crop, growth and water with them. And **farmhands run the whole
+cycle on their own** — they sow, water, harvest, and when the seed bin runs dry they walk
+to the market and buy more out of your purse (8 at a time, never more than 35% of your
+coin, always leaving you 60), across every crop your skill has unlocked, at **four times**
+the pace of any other trade and out to 120 metres. Breaking the ground is the only part
+left to you. Two bugs fell out of that: clearing a plot disposed the **shared cached
+geometry**, which would have blanked every other field on the map; and a stuck worker
+blacklisted its target for a flat 75 seconds, so within a few minutes it had skipped
+every plot and stood idle — roughly one run in four. Blacklisting is now a 5 → 14 → 75
+second ladder that resets on the first success, detours respect ground height, and a
+genuinely wedged worker is freed by a spiral search.
+
+**Previous round — defence:** guards were reported as not working, and it turned out to be
 three separate faults. The town "centre" was a plain average of every building, so one
 watchfire on a distant peak dragged it forty metres into empty grass and the guards
 patrolled *that*; it is now a trimmed mean that ignores outposts entirely. A villager
@@ -866,7 +962,7 @@ And two companions won with patience rather than coins: a **falcon** that rides 
 shoulder and dives on command, and an **Asiatic cheetah** that runs at your heel and goes
 for anything that comes at you.
 
-**Previous round:** swimming now lies flat at the surface and is frame-rate independent ·
+**Before that:** swimming now lies flat at the surface and is frame-rate independent ·
 placing a building **evicts** anything caught under it, so nothing is ever walled in ·
 any placed building can be **picked up with `G`**, moved and rotated for free, keeping its
 level, unique look, damage and rotation (`ESC` puts it back) · you can swing a sword or

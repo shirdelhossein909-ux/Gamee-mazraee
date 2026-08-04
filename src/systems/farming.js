@@ -17,6 +17,8 @@
     this._soilGeo = {};
     this._cropGeo = {};
     this._stealTimer = 0;
+    this.moving = null;          // a plot lifted off the ground, following your aim
+    this.ghost = null;
   }
 
   /* ---------------- grid helpers ---------------- */
@@ -175,8 +177,129 @@
 
   Farming.prototype.remove = function (plot) {
     if (!plot) return;
+    /* soil and crop geometry is cached and shared between every plot, so
+       this must NOT dispose it — only drop the group */
     this.group.remove(plot.group);
     this.plots.delete(U.key(plot.gx, plot.gz));
+  };
+
+  /* =========================================================
+     EDITING A FIELD
+     A ploughed strip in the wrong place used to be permanent. Now you
+     can pick one up and set it down somewhere better, or clear it away
+     entirely — with whatever was growing on it handled honestly.
+     ========================================================= */
+
+  /** clear a plot away. A ripe crop is harvested first; a young one is lost. */
+  Farming.prototype.clear = function (plot) {
+    const g = this.game;
+    if (!plot) return false;
+    let msg = '🪏 زمین برداشته شد';
+    if (plot.crop && plot.stage >= 3) {
+      this.harvest(plot);                       // do not throw away a ripe crop
+      msg = '🪏 محصول برداشت شد و زمین هم برداشته شد';
+    } else if (plot.crop) {
+      const seed = C.CROPS[plot.crop] ? C.CROPS[plot.crop].seed : null;
+      /* half the seed comes back — you did dig it up early */
+      if (seed && Math.random() < 0.5) g.inv.add(seed, 1);
+      msg = '🪏 زمین برداشته شد — کِشت نارس از بین رفت';
+    }
+    this.remove(plot);
+    g.audio.till();
+    g.fx.hitBurst(plot.x, plot.y + 0.3, plot.z, 0x7a5a3a, 8);
+    g.ui.toast(msg, 'good');
+    return true;
+  };
+
+  /** lift a plot off the ground; it follows the crosshair until you place it */
+  Farming.prototype.startMove = function (plot) {
+    const g = this.game;
+    if (!plot) return false;
+    if (this.moving) this.cancelMove();
+    if (g.building.placing) g.building.cancel();
+    /* remember everything worth keeping, then take it out of the world */
+    this.moving = {
+      crop: plot.crop, stage: plot.stage, growth: plot.growth,
+      moisture: plot.moisture, from: { gx: plot.gx, gz: plot.gz },
+      gx: plot.gx, gz: plot.gz, ok: true
+    };
+    this.remove(plot);
+    this.ghost = new THREE.Group();
+    this.ghost.add(new THREE.Mesh(this._soil(false).geometry.clone(), M.MAT.ghostOk));
+    this.group.add(this.ghost);
+    g.ui.toast('🪏 زمین را برداشتی — کلیک چپ بگذارش، ESC لغو', 'gold');
+    if (g.ui.showBuildBar) g.ui.showBuildBar({ icon: '🪏', name: 'جابه‌جایی زمین کشاورزی' }, true);
+    return true;
+  };
+
+  Farming.prototype.updateMove = function () {
+    const g = this.game, m = this.moving;
+    if (!m) return;
+    const ray = g.player.aimRay();
+    const hit = g.world.rayGround(ray.origin, ray.dir, 40);
+    let x, z;
+    if (hit) { x = hit.point.x; z = hit.point.z; }
+    else { const f = g.player.frontPoint(6); x = f.x; z = f.z; }
+    const c = this.cell(x, z);
+    m.gx = c.gx; m.gz = c.gz;
+    const r = this.canTill(c.gx * GS, c.gz * GS);
+    m.ok = !!r.ok;
+    m.why = r.why || '';
+    const y = r.ok ? r.y : g.world.heightAt(c.gx * GS, c.gz * GS);
+    this.ghost.position.set(c.gx * GS, y + 0.02, c.gz * GS);
+    this.ghost.children[0].material = m.ok ? M.MAT.ghostOk : M.MAT.ghostBad;
+    if (g.ui.updateBuildBar) g.ui.updateBuildBar({ icon: '🪏', name: 'جابه‌جایی زمین کشاورزی' }, m.ok ? null : m.why);
+  };
+
+  /** put it down where the ghost is */
+  Farming.prototype.confirmMove = function () {
+    const g = this.game, m = this.moving;
+    if (!m) return false;
+    if (!m.ok) { g.ui.toast('⚠️ ' + (m.why || 'اینجا نمی‌شود'), 'bad'); g.audio.deny(); return false; }
+    const plot = this._restorePlot(m.gx, m.gz, m);
+    this.moving = null;
+    this._clearGhost();
+    if (g.ui.hideBuildBar) g.ui.hideBuildBar();
+    g.audio.build();
+    g.ui.toast('🪏 زمین جابه‌جا شد', 'good');
+    return !!plot;
+  };
+
+  Farming.prototype.cancelMove = function () {
+    const m = this.moving;
+    if (!m) return false;
+    this.moving = null;
+    this._clearGhost();
+    /* always give it back, even if the old cell somehow will not take it */
+    this._restorePlot(m.from.gx, m.from.gz, m);
+    if (this.game.ui.hideBuildBar) this.game.ui.hideBuildBar();
+    return true;
+  };
+
+  Farming.prototype._clearGhost = function () {
+    if (!this.ghost) return;
+    this.group.remove(this.ghost);
+    this.ghost.traverse(function (o) { if (o.geometry) o.geometry.dispose(); });
+    this.ghost = null;
+  };
+
+  /** rebuild a plot at a cell, carrying its crop across */
+  Farming.prototype._restorePlot = function (gx, gz, m) {
+    const w = this.game.world;
+    const wx = gx * GS, wz = gz * GS;
+    const r = this.canTill(wx, wz);
+    const y = r.ok ? r.y : w.footprint(wx, wz, GS, GS, 0).avg;
+    const plot = {
+      gx: gx, gz: gz, x: wx, z: wz, y: y,
+      crop: m.crop, stage: m.stage, growth: m.growth, moisture: m.moisture,
+      group: new THREE.Group(), soil: null, plant: null
+    };
+    plot.group.position.set(wx, y + 0.01, wz);
+    this.group.add(plot.group);
+    this.plots.set(U.key(gx, gz), plot);
+    this._refreshSoil(plot);
+    this._refreshPlant(plot);
+    return plot;
   };
 
   /* ---------------- visuals ---------------- */

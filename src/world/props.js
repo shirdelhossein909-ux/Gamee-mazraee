@@ -916,8 +916,68 @@
     return out;
   }
 
+  /* --------------------------------------------------------
+     The last two upgrades change what a wall is *made of*, not just how
+     tall it stands. One below the top it is grown from crystal — pale
+     blue, faceted, lit from inside. At the top it is bone: a rib cage of
+     a wall with skulls set into the pillars. You should be able to tell
+     how far a city has come from the other side of the valley.
+     -------------------------------------------------------- */
+  const SKIN = {
+    bone: { main: 0xe8e4d4, dark: 0xbdb49c, trim: 0x2e2a24, glow: 0xff5a3a },
+    gem: { main: 0x9fe8ff, dark: 0x3f9ec4, trim: 0xdcecf4, glow: 0x9fe8ff }
+  };
+  /** which material a defensive piece is at this level: null | 'gem' | 'bone' */
+  function wallTier(l, max) {
+    if (l >= max) return 'bone';
+    if (l >= max - 1) return 'gem';
+    return null;
+  }
+  M.wallTier = wallTier;
+
+  /** a skull, facing +Z, sized to fit a wall pillar */
+  function skullParts(p, x, y, z, s, col) {
+    const c = col === undefined ? SKIN.bone.main : col;
+    p.push({ g: P.ico, c: c, p: [x, y, z], s: [0.62 * s, 0.6 * s, 0.58 * s] });
+    p.push({ g: P.box, c: c, p: [x, y - 0.24 * s, z + 0.16 * s], s: [0.34 * s, 0.24 * s, 0.3 * s] });
+    for (const sx of [-1, 1]) {
+      p.push({ g: P.box, c: SKIN.bone.trim, glow: false, p: [x + sx * 0.15 * s, y + 0.06 * s, z + 0.26 * s], s: [0.17 * s, 0.19 * s, 0.1 * s] });
+      p.push({ g: P.ico, c: SKIN.bone.glow, glow: true, p: [x + sx * 0.15 * s, y + 0.06 * s, z + 0.29 * s], s: [0.1 * s, 0.11 * s, 0.06 * s] });
+    }
+    for (let i = -1; i <= 1; i++) {
+      p.push({ g: P.box, c: SKIN.bone.trim, p: [x + i * 0.11 * s, y - 0.3 * s, z + 0.28 * s], s: [0.06 * s, 0.12 * s, 0.05 * s] });
+    }
+  }
+  /** a curved rib, springing from a spine at (x,y,z) */
+  function ribParts(p, x, y, z, dirX, dirZ, s, col) {
+    for (let i = 0; i < 4; i++) {
+      const t = i / 3;
+      p.push({
+        g: P.box, c: col,
+        p: [x + dirX * (0.2 + t * 0.5) * s, y + (0.35 + t * 0.55) * s, z + dirZ * (0.2 + t * 0.5) * s],
+        r: [dirZ * (0.5 - t * 0.9), 0, -dirX * (0.5 - t * 0.9)],
+        s: [0.16 * s, 0.42 * s, 0.16 * s]
+      });
+    }
+  }
+  /** a cluster of crystal shards */
+  function shardParts(p, x, y, z, s, n, seed) {
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * 6.283 + (seed || 0);
+      const r = 0.16 + (i % 3) * 0.09;
+      p.push({
+        g: P.cone5, c: i % 2 ? SKIN.gem.main : SKIN.gem.dark, glow: i % 2 === 0,
+        p: [x + Math.cos(a) * r * s, y + (0.25 + (i % 3) * 0.14) * s, z + Math.sin(a) * r * s],
+        r: [Math.sin(a) * 0.3, a, -Math.cos(a) * 0.3],
+        s: [0.2 * s, (0.5 + (i % 3) * 0.24) * s, 0.2 * s]
+      });
+    }
+  }
+
   BM.fence = function (l, def, mask) {
     const p = [];
+    const tier = wallTier(l, (def && def.max) || 3);
+    if (tier) return boneOrGemFence(l, tier, mask);
     const col = l >= 3 ? COL.plank : (l >= 2 ? COL.wood : COL.woodDark);
     const H = 1.24, L = CELL_HALF;
     // centre post
@@ -938,7 +998,89 @@
     return assemble(p);
   };
 
+  /** the top two grades of palisade: a rib fence, or a crystal one */
+  function boneOrGemFence(l, tier, mask) {
+    const p = [];
+    const S = tier === 'bone' ? SKIN.bone : SKIN.gem;
+    const H = 1.55, L = CELL_HALF;
+    p.push({ g: P.box, c: S.dark, p: [0, 0.1, 0], s: [0.5, 0.2, 0.5] });
+    p.push({ g: P.cyl6, c: S.main, p: [0, H / 2, 0], s: [0.3, H, 0.3] });
+    if (tier === 'bone') skullParts(p, 0, H + 0.24, 0, 0.85);
+    else shardParts(p, 0, H - 0.1, 0, 1.1, 5, 0.4);
+    for (const d of armDirs(mask)) {
+      const cx = d[0] * L / 2, cz = d[1] * L / 2;
+      const sx = d[0] ? L : 0.16, sz = d[1] ? L : 0.16;
+      // the spine
+      p.push({ g: P.box, c: S.main, p: [cx, 0.95, cz], s: [sx, 0.18, sz] });
+      p.push({ g: P.box, c: S.dark, p: [cx, 0.5, cz], s: [sx, 0.12, sz] });
+      if (tier === 'bone') {
+        for (const t of [0.45, 0.9]) {
+          ribParts(p, d[0] * t, 0.55, d[1] * t, d[1], -d[0], 0.62, S.main);
+          ribParts(p, d[0] * t, 0.55, d[1] * t, -d[1], d[0], 0.62, S.main);
+        }
+      } else {
+        for (const t of [0.4, 0.85]) shardParts(p, d[0] * t, 0.8, d[1] * t, 0.7, 3, t * 3);
+      }
+    }
+    return assemble(p);
+  }
+
+  /** the top two grades of curtain wall */
+  function boneOrGemWall(l, tier, mask) {
+    const p = [];
+    const S = tier === 'bone' ? SKIN.bone : SKIN.gem;
+    const h = 1.5 + l * 0.45, T = 0.82, L = CELL_HALF;
+    p.push({ g: P.box, c: S.main, p: [0, h / 2, 0], s: [T, h, T] });
+    p.push({ g: P.box, c: S.dark, p: [0, h + 0.18, 0], s: [T * 1.06, 0.36, T * 1.06] });
+    if (tier === 'bone') {
+      skullParts(p, 0, h + 0.72, 0, 1.15);
+      for (const sx of [-1, 1]) {
+        p.push({ g: P.cone5, c: S.main, p: [sx * 0.42, h + 0.95, -0.1], r: [-0.3, 0, sx * 0.55], s: [0.2, 0.75, 0.2] });
+      }
+    } else {
+      shardParts(p, 0, h + 0.3, 0, 1.5, 6, 0.7);
+    }
+    for (const d of armDirs(mask)) {
+      const cx = d[0] * L / 2, cz = d[1] * L / 2;
+      const sx = d[0] ? L : T, sz = d[1] ? L : T;
+      p.push({ g: P.box, c: S.main, p: [cx, h / 2, cz], s: [sx, h, sz] });
+      // banded courses
+      for (let i = 0; i < 3; i++) {
+        p.push({
+          g: P.box, c: i % 2 ? S.dark : S.main,
+          p: [cx, h * (0.22 + i * 0.26), cz],
+          s: [d[0] ? L * 0.98 : T * 1.05, 0.2, d[1] ? L * 0.98 : T * 1.05]
+        });
+      }
+      if (tier === 'bone') {
+        // a rib cage rising out of the parapet
+        for (const t of [0.35, 0.75]) {
+          for (const s2 of [-1, 1]) {
+            ribParts(p, d[0] * t, h - 0.5, d[1] * t, d[1] * s2, -d[0] * s2, 0.7, S.main);
+          }
+        }
+        for (let i = 0; i < 2; i++) {
+          const t = 0.3 + i * 0.45;
+          p.push({
+            g: P.cone5, c: S.main, p: [d[0] * t, h + 0.45, d[1] * t],
+            s: [0.26, 0.7, 0.26]
+          });
+        }
+      } else {
+        for (let i = 0; i < 2; i++) {
+          const t = 0.3 + i * 0.45;
+          shardParts(p, d[0] * t, h - 0.05, d[1] * t, 0.95, 4, t * 4);
+        }
+        // a vein of light running along the course
+        p.push({ g: P.box, c: S.glow, glow: true, p: [cx, h * 0.62, cz], s: [d[0] ? L * 0.9 : T * 1.07, 0.09, d[1] ? L * 0.9 : T * 1.07] });
+      }
+    }
+    return assemble(p);
+  }
+
   BM.wall = function (l, def, mask) {
+    const tier = wallTier(l, (def && def.max) || 3);
+    if (tier) return boneOrGemWall(l, tier, mask);
     const p = [];
     const h = 1.5 + l * 0.35, T = 0.78, L = CELL_HALF;
     // centre pillar keeps corners solid
@@ -969,6 +1111,146 @@
       if (l >= 3) p.push({ g: P.box, c: COL.iron, p: [cx, h + 0.02, cz], s: [sx, 0.1, sz] });
     }
     return assemble(p);
+  };
+
+  /* =========================================================
+     THE CITY GATE
+     Two towers, a battlemented arch across the top, and two leaves on
+     real hinges. The leaves come back as their own groups so building.js
+     can swing them — everything else is merged as usual.
+     The footprint runs along X; building.js turns the whole thing to face
+     whichever way the wall runs.
+     ========================================================= */
+  BM.gatehouse = function (l, def) {
+    const max = (def && def.max) || 3;
+    const tier = wallTier(l, max);
+    const S = tier === 'bone' ? SKIN.bone : tier === 'gem' ? SKIN.gem : null;
+    const stone = S ? S.main : COL.stone;
+    const dark = S ? S.dark : COL.stoneDark;
+    const timber = S ? S.dark : COL.woodDark;
+    const band = S ? S.trim : COL.wood;
+    const metal = S ? S.trim : COL.iron;
+
+    const g = new THREE.Group();
+    const p = [];
+    /* the opening is 4 wide; towers stand either side of it */
+    const HALF = 2.0;                 // half the footprint along the wall
+    const OPEN = 1.5;                 // half the doorway
+    const TW = HALF - OPEN;           // tower width
+    const th = 5.4 + l * 1.1;         // tower height
+    const dz = 1.35;                  // how deep the gatehouse is
+
+    for (const sx of [-1, 1]) {
+      const cx = sx * (OPEN + TW / 2);
+      // tower shaft
+      p.push({ g: P.box, c: stone, p: [cx, th / 2, 0], s: [TW, th, dz * 2] });
+      p.push({ g: P.box, c: dark, p: [cx, 0.35, 0], s: [TW * 1.18, 0.7, dz * 2.2] });
+      // courses
+      for (let i = 0; i < 4; i++) {
+        p.push({ g: P.box, c: i % 2 ? dark : stone, p: [cx, 1.1 + i * 1.15, 0], s: [TW * 1.05, 0.34, dz * 2.05] });
+      }
+      // corbelled head and crenellations
+      p.push({ g: P.box, c: dark, p: [cx, th + 0.3, 0], s: [TW * 1.35, 0.6, dz * 2.4] });
+      for (let i = 0; i < 3; i++) {
+        for (const sz of [-1, 1]) {
+          p.push({
+            g: P.box, c: stone,
+            p: [cx + (i - 1) * TW * 0.34, th + 0.95, sz * (dz * 1.05)],
+            s: [TW * 0.28, 0.7, 0.32]
+          });
+        }
+      }
+      // arrow slits, lit from within
+      for (const sz of [-1, 1]) {
+        for (const y of [2.4, 4.0]) {
+          p.push({ g: P.box, c: metal, p: [cx, y, sz * (dz + 0.03)], s: [0.2, 0.95, 0.08] });
+          p.push({ g: P.box, c: S ? S.glow : 0xffdd88, glow: true, p: [cx, y, sz * (dz + 0.07)], s: [0.11, 0.72, 0.05] });
+        }
+      }
+      // a banner down the face
+      p.push({ g: P.box, c: sx > 0 ? 0x9e2b2b : 0x2f4a7a, p: [cx, th * 0.55, dz + 0.09], s: [TW * 0.5, th * 0.5, 0.05] });
+      p.push({ g: P.box, c: band, p: [cx, th * 0.8 + 0.1, dz + 0.12], s: [TW * 0.55, 0.14, 0.06] });
+      if (tier === 'bone') {
+        skullParts(p, cx, th + 1.6, dz * 0.4, 1.5);
+        for (const sz of [-1, 1]) ribParts(p, cx, th * 0.35, sz * dz, 0, sz, 1.1, stone);
+      } else if (tier === 'gem') {
+        shardParts(p, cx, th + 0.9, 0, 1.9, 6, sx);
+      } else {
+        p.push({ g: P.cone5, c: COL.roofRed, p: [cx, th + 1.7, 0], s: [TW * 1.5, 1.9, dz * 2.5] });
+        p.push({ g: P.sph, c: COL.gold, p: [cx, th + 2.7, 0], s: [0.34, 0.4, 0.34] });
+      }
+    }
+
+    /* the arch over the doorway, drawn as a fan of voussoirs */
+    const ah = th * 0.62;
+    for (let i = 0; i <= 9; i++) {
+      const a = Math.PI * (i / 9);
+      p.push({
+        g: P.box, c: i % 2 ? dark : stone,
+        p: [Math.cos(a) * OPEN, ah + Math.sin(a) * (OPEN * 0.72), 0],
+        r: [0, 0, -a + Math.PI / 2],
+        s: [0.62, 0.5, dz * 2.05]
+      });
+    }
+    /* the lintel and walkway across the top, joining the two towers */
+    p.push({ g: P.box, c: stone, p: [0, th * 0.94, 0], s: [OPEN * 2 + 0.4, 0.8, dz * 2.05] });
+    p.push({ g: P.box, c: dark, p: [0, th + 0.3, 0], s: [OPEN * 2 + 0.6, 0.6, dz * 2.4] });
+    for (let i = 0; i < 5; i++) {
+      for (const sz of [-1, 1]) {
+        p.push({
+          g: P.box, c: stone, p: [(i - 2) * 0.62, th + 0.95, sz * (dz * 1.05)],
+          s: [0.36, 0.7, 0.32]
+        });
+      }
+    }
+    /* murder-holes / portcullis teeth under the arch */
+    for (let i = 0; i < 6; i++) {
+      p.push({ g: P.cone5, c: metal, p: [(i - 2.5) * 0.5, ah - 0.15, 0], r: [Math.PI, 0, 0], s: [0.16, 0.5, 0.16] });
+    }
+    /* a lantern on each side of the passage */
+    for (const sx of [-1, 1]) {
+      p.push({ g: P.cyl6, c: metal, p: [sx * (OPEN - 0.2), 3.0, dz - 0.12], s: [0.1, 0.5, 0.1] });
+      p.push({ g: P.taper(0.9, 0.5, 4), c: S ? S.glow : 0xffdd88, glow: true, p: [sx * (OPEN - 0.2), 2.65, dz - 0.12], s: [0.4, 0.46, 0.4] });
+    }
+    /* the sill you walk over */
+    p.push({ g: P.box, c: dark, p: [0, 0.09, 0], s: [OPEN * 2, 0.18, dz * 1.9] });
+
+    g.add(assemble(p));
+
+    /* --- the two leaves --- */
+    const leafH = ah - 0.2;
+    const leaves = [];
+    for (const sx of [-1, 1]) {
+      const lp = [];
+      /* built from the hinge outward, so rotating the group swings it */
+      const w = OPEN;
+      lp.push({ g: P.box, c: timber, p: [-sx * w / 2, leafH / 2, 0], s: [w, leafH, 0.26] });
+      for (let i = 0; i < 4; i++) {
+        lp.push({
+          g: P.box, c: band,
+          p: [-sx * (0.2 + i * (w - 0.4) / 3), leafH / 2, 0.16],
+          s: [0.19, leafH * 0.96, 0.09]
+        });
+      }
+      for (const y of [leafH * 0.24, leafH * 0.72]) {
+        lp.push({ g: P.box, c: metal, p: [-sx * w / 2, y, 0.2], s: [w * 0.96, 0.19, 0.1] });
+        for (let i = 0; i < 3; i++) {
+          lp.push({ g: P.sph, c: metal, p: [-sx * (0.28 + i * 0.4), y, 0.27], s: [0.13, 0.13, 0.1] });
+        }
+      }
+      // a heavy ring handle at the free edge
+      lp.push({ g: P.ring, c: metal, p: [-sx * (w - 0.3), leafH * 0.5, 0.22], r: [0, 0, 0], s: [0.72, 0.72, 0.72] });
+      if (tier === 'bone') skullParts(lp, -sx * (w * 0.5), leafH * 0.78, 0.24, 0.8);
+      else if (tier === 'gem') shardParts(lp, -sx * (w * 0.5), leafH * 0.62, 0.22, 0.8, 4, sx);
+      const leaf = assemble(lp);
+      /* hinge post sits at the inner face of the tower */
+      leaf.position.set(sx * OPEN, 0, 0);
+      g.add(leaf);
+      leaves.push(leaf);
+    }
+    g.userData.leaves = leaves;
+    g.userData.isGate = true;
+    return g;
   };
 
   BM.gate = function (l, def, mask) {
