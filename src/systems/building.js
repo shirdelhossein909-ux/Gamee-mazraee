@@ -599,6 +599,15 @@
       z = Math.round(z / S) * S;
       p.rot = 0;
     }
+    /* Levelled squares tile too. The first one lands where you aim; after
+       that they click into the grid that one set up, so a second square goes
+       down flush against the first instead of wherever the crosshair was —
+       which is what made matching heights feel like a matter of luck. */
+    if (p.def.terrain && p.def.terrain.op === 'flat') {
+      const snap = this.game.terraform.latticeAnchor(p.def, x, z);
+      if (snap) { x = snap.x; z = snap.z; }
+      p.rot = 0;
+    }
 
     // preview the shape it will take once it links to its neighbours
     if (p.def.connects) {

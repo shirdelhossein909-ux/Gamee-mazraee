@@ -522,6 +522,44 @@ python3 -m http.server 8000      # یا:  npx http-server -p 8000
   یک ترانشهٔ تخت از دل تپه می‌بُرد. اسکله هم همین‌طور، چون به ساحلش نیاز دارد
 * اگر خوشت نمی‌آید، در **تنظیمات** خاموشش کن — «تخت‌کردن خودکار زمین زیر ساختمان»
 
+### 🧩 قطعه‌ها روی شبکهٔ قطعهٔ اول جا می‌افتند
+شکایت درست بود: «یکی تخت می‌شود، بعدی شانسی هم‌تراز می‌شود.» و شانس هم دقیقاً کلمهٔ
+درستی بود — چون **جای** قطعه هرجایی بود که نشانگر افتاده بود، دو قطعه معمولاً
+نه کنار هم بودند نه دور از هم، و هم‌ترازی به فاصلهٔ تصادفی‌شان بستگی داشت.
+
+حالا **قطعهٔ اول دقیقاً همان‌جا که نشانه گرفتی می‌نشیند، و بقیه روی شبکهٔ آن قفل
+می‌شوند.** لبه به لبه، بدون درز، بدون اینکه لازم باشد دقیق کلیک کنی:
+
+* شبکه فقط از قطعه‌های **هم‌اندازهٔ دستی** گرفته می‌شود — سکوی خودکارِ زیر یک خانه
+  شبکه را نمی‌دزدد، و قطعهٔ کوچک شبکهٔ قطعهٔ بزرگ را به هم نمی‌ریزد
+* از فاصلهٔ حدود **سه‌ونیم برابر پهنای قطعه** دورتر، شبکه رهایت می‌کند تا بتوانی
+  یک میدان جدا جای دیگری بسازی
+* **بُرد هم‌ترازی هم با اندازهٔ قطعه بزرگ شد** (۱٫۲ برابر پهنا)، پس حتی اگر یک خانه
+  را جا انداختی، باز هم‌تراز در می‌آید
+* **قبل از کلیک** توی نوار ساخت می‌بینی: «✅ هم‌تراز قطعهٔ کناری»
+
+اندازه‌گیری در تست: ۹ قطعهٔ ۲۸×۲۸ که با **±۴٫۵ متر خطای نشانه‌گیری** گذاشته شدند،
+روی زمینی با **۲۱ متر** پستی‌وبلندی — **هر ۹ تا روی یک ارتفاع** (۲٫۴۰۵۴۷۸) و کل
+سطح ۸۴×۸۴ متری **۰٫۰۰۰۰۰۰** ناهمواری دارد.
+
+### 📦 ظرفیت انبارها دو برابر شد
+
+| | قبل | حالا |
+|---|---|---|
+| کوله‌پشتی خالی | ۲۲۰ | **۴۴۰** |
+| 🛢️ سیلو (سطح ۱ … ۵) | ۱۸۰ … ۹۰۰ | **۳۶۰ … ۱۸۰۰** |
+| 🏚️ انبار بزرگ (سطح ۱ … ۵) | ۷۵۰ … ۳۷۵۰ | **۱۵۰۰ … ۷۵۰۰** |
+
+یعنی نسبت به نسخهٔ اولِ بازی، سیلو **۶ برابر** و انبار بزرگ **۱۰ برابر** شده‌اند.
+یک انبار سطح ۵ به‌تنهایی **۷۵۰۰** جا می‌دهد.
+
+### 🖌️ نگه‌دار و بکش
+کلیدِ چپ را **نگه دار و نشانگر را بچرخان** — قطعه‌ها پشت سرش توی شبکه می‌افتند.
+دیگر لازم نیست قدم‌به‌قدم کلیک کنی. (این فقط برای ابزارهای زمین است؛ بقیهٔ
+ساختمان‌ها همان کلیک عمدی خودشان را می‌خواهند.)
+
+و یک اندازهٔ تازه: **🟩 تخت‌کردن زمین شهر (۵۶×۵۶)** — چهار برابر قطعهٔ بزرگ، یک کلیک.
+
 ### 🧱 قطعهٔ بعدی خودش هم‌تراز قطعهٔ اول می‌شود
 اولش این‌طور نبود و ایراد داشت: هر قطعه‌ای که تخت می‌کردی **به ساز خودش می‌رقصید** و
 سطح خودش را می‌گرفت، چون فاصله از **مرکز** قطعهٔ تازه تا مرکز قطعهٔ قبلی حساب می‌شد —
@@ -544,6 +582,7 @@ python3 -m http.server 8000      # یا:  npx http-server -p 8000
 |---|---|---|
 | 🟩 تخت‌کردن زمین (کوچک) | ۱۰×۱۰ | یک حیاط |
 | 🟢 تخت‌کردن زمین (بزرگ) | ۲۸×۲۸ | یک میدان |
+| 🟩 تخت‌کردن زمین شهر | ۵۶×۵۶ | کل زمین یک شهر، با یک کلیک |
 | ↩️ بازگرداندن زمین | — | هر تغییری را به شکل طبیعی خودش برمی‌گرداند |
 
 * وسط قطعه **تا آخرین میلی‌متر تخت** است (اندازه‌گیری: اختلاف ارتفاع **۰٫۰۰۰۰۰۰**)
@@ -1051,7 +1090,25 @@ with `V`, and lead it into a stable — a real ten-stall hall, one horse per roo
 tamed horses walk to their own stall and stand in it. Working villagers borrow them to
 reach distant jobs at twice the speed.
 
-**Latest round — fields, doorways and one shared level:** farm plots are now in the build
+**Latest round — levelled squares that tile:** "one square flattens, the next one matches
+by luck" was exactly right, and luck was the right word: the *position* of a square was
+wherever the crosshair happened to land, so two squares were usually neither adjacent nor
+far apart, and whether their heights agreed came down to that random gap. Now the **first
+square lands exactly where you aim and every square after it snaps to the grid that one
+set up** — edge to edge, no seam, no need to click precisely. The grid is taken only from
+hand-placed squares of the same size (a platform levelled under a house cannot hijack it),
+it lets go beyond about three and a half block widths so you can start a separate plaza
+elsewhere, and the height-matching reach now scales with the block, so skipping a cell
+still matches. The build bar tells you **before** you click: "✅ level with the square
+beside it". Measured: nine 28-metre squares placed with **±4.5 m of aiming slop** on
+ground with **21 m of natural relief** all landed on one height, and the finished 84×84
+surface has 0.000000 of relief. You can also **hold the button and sweep** — squares drop
+into the lattice behind the crosshair instead of one deliberate click at a time — and
+there is a new **56×56 city block**, four times the large one. Finally, **storage is
+doubled**: an empty pack holds 440, a silo 360 a level and a warehouse 1500 a level, so a
+level-5 warehouse alone is 7500.
+
+**Previous round — fields, doorways and one shared level:** farm plots are now in the build
 menu in **three sizes** — one tile, 3×3, or a full 7×7 (49 plots, 14 metres) — because a
 big field was 49 swings of a hoe while everything else in the game came out of a menu.
 A field **levels its ground before it ploughs it**, which is what makes it land in one
@@ -1082,7 +1139,7 @@ either side, eye sockets lit red after dark. Deliberately restrained — 42 cm t
 triangles, a tenth of the building — on all 28 buildings, at max level only, never on
 walls or ornaments.
 
-**Previous round — shaping the land:** the world's height was a pure function of the seed
+**Before that — shaping the land:** the world's height was a pure function of the seed
 and nothing could change it. Now it remembers exactly one thing you did to it — the
 ground you levelled and the hills you raised — and that survives the save. **Every
 building levels the ground under it**, and if there is already levelled ground within
@@ -1113,7 +1170,7 @@ worked, no target was ever written off as unreachable. It is now a nudge of a fe
 that samples the path (so it walks up a slope but not up a cliff) and gives up after two
 consecutive failures.
 
-**Before that — the gate, and farmhands who actually farm:** the city gate is now a
+**And before that — the gate, and farmhands who actually farm:** the city gate is now a
 building rather than a plank the height of a fence — two battlemented towers with arrow
 slits, banners and lanterns, a stone fan across the arch, and **two iron-bound leaves**
 that swing from their own hinges. It stands 9.4 metres against a wall's 2.2. It **opens
@@ -1138,7 +1195,7 @@ every plot and stood idle — roughly one run in four. Blacklisting is now a 5 �
 second ladder that resets on the first success, detours respect ground height, and a
 genuinely wedged worker is freed by a spiral search.
 
-**And before that — defence:** guards were reported as not working, and it turned out to be
+**Defence round:** guards were reported as not working, and it turned out to be
 three separate faults. The town "centre" was a plain average of every building, so one
 watchfire on a distant peak dragged it forty metres into empty grass and the guards
 patrolled *that*; it is now a trimmed mean that ignores outposts entirely. A villager

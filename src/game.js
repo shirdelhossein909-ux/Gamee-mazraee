@@ -423,8 +423,22 @@
     /* fishing can also be reeled in with space */
     if (this.gather.fishing && IN.gpressed('Space')) { this.gather.reelIn(); return; }
 
+    /* Shaping ground is the one thing you do over and over in the same
+       breath, so the land tools paint while the button is held: sweep the
+       crosshair and squares drop into the lattice behind it. Everything
+       else still wants a deliberate click each time. */
+    const shaping = this.building.placing;
+    this._paintT = Math.max(0, (this._paintT || 0) - dt);
+    if (shaping && shaping.def.terrain && IN.enabled && IN.buttons[0] && !IN.clicked(0)) {
+      if (this._paintT <= 0 && this.building.validate(shaping.defId, shaping.x, shaping.z, 0, 1).ok) {
+        this._paintT = 0.12;
+        this.building.confirm();
+      }
+    }
+
     /* left click */
     if (IN.clicked(0)) {
+      this._paintT = 0.2;
       if (this.farming.moving) this.farming.confirmMove();
       else if (this.building.placing) this.building.confirm();
       else if (this.player.mount) {

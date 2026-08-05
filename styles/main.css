@@ -204,6 +204,8 @@ kbd{
 .bb-cost .ok{color:var(--green)}
 .bb-keys{font-size:11px;color:var(--muted)}
 .bb-warn{color:var(--red);font-size:12px;margin-top:4px;animation:pulse 1s infinite}
+/* the same line carries good news, in green and without the nagging pulse */
+.bb-warn.good{color:var(--green,#7ad07a);animation:none}
 
 /* ===================== FISHING ===================== */
 #fishing{

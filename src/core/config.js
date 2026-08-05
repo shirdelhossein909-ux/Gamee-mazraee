@@ -319,13 +319,13 @@
     id: 'silo', name: 'سیلو', icon: '🛢️', cat: 'farm', model: 'silo', size: [3, 3], max: 5, tier: 0, sk: 1,
     desc: 'ظرفیت نگهداری محصولات را افزایش می‌دهد.',
     cost: (l) => scale({ wood: 25, stone: 15 }, l),
-    effects: (l) => ({ storage: 180 * l })          // x3, and still linear per level
+    effects: (l) => ({ storage: 360 * l })          // x6, and still linear per level
   });
   bld({
     id: 'warehouse', name: 'انبار بزرگ', icon: '🏚️', cat: 'city', model: 'shed', size: [5, 4], max: 5, tier: 1, sk: 3,
     desc: 'ظرفیت کل کوله‌پشتی و انبار را خیلی زیاد می‌کند.',
     cost: (l) => Object.assign(scale({ wood: 60, stone: 30, plank: 10 }, l), { coin: Math.round(120 * Math.pow(1.9, l - 1)) }),
-    effects: (l) => ({ storage: 750 * l })          // x5 — a real warehouse
+    effects: (l) => ({ storage: 1500 * l })         // x10 — a real warehouse
   });
   bld({
     id: 'coop', name: 'مرغداری', icon: '🐔', cat: 'farm', model: 'coop', size: [3, 3], max: 5, tier: 0, sk: 1,
@@ -619,7 +619,10 @@
     'یک قطعهٔ ۱۰×۱۰ را کاملاً تخت می‌کند و لبه‌هایش را نرم به زمین اطراف می‌رساند. اگر کنارِ زمین تخت‌شدهٔ دیگری باشد، هم‌ترازِ همان می‌شود تا شهرت یک سطح یکدست شود.');
   land('level_l', 'تخت‌کردن زمین (بزرگ)', '🟢', [28, 28],
     { op: 'flat', edge: 5 }, 90, { wood: 12, stone: 6 },
-    'یک قطعهٔ ۲۸×۲۸ را یک‌جا تخت می‌کند — اندازهٔ یک میدان. برای صاف کردن کل زمینِ شهر، همین را پشت‌سرهم بگذار.', 1);
+    'یک قطعهٔ ۲۸×۲۸ را یک‌جا تخت می‌کند — اندازهٔ یک میدان. قطعهٔ دوم روی شبکهٔ قطعهٔ اول می‌نشیند و خودش هم‌تراز آن می‌شود.', 1);
+  land('level_xl', 'تخت‌کردن زمین شهر', '🟩', [56, 56],
+    { op: 'flat', edge: 7 }, 300, { wood: 40, stone: 20 },
+    'یک قطعهٔ ۵۶×۵۶ — کل زمینِ یک شهر با یک کلیک. برای وقتی که نمی‌خواهی قدم‌به‌قدم تختش کنی.', 2);
   land('level_undo', 'بازگرداندن زمین', '↩️', [8, 8],
     { op: 'undo' }, 8, {},
     'زمینی که تخت کرده‌ای یا تپه‌ای که ساخته‌ای را به شکل طبیعی خودش برمی‌گرداند. نشانه بگیر و کلیک کن.');
@@ -1131,7 +1134,7 @@
     coins: 120,
     items: { wood: 12, stone: 6, seed_wheat: 6, seed_carrot: 3, bread: 2 },
     tools: { hoe: 1, can: 1, seeds: 1, axe: 1, pickaxe: 1, sword: 1, bow: 0, rod: 1, food: 1 },
-    baseStorage: 220
+    baseStorage: 440
   };
 
   C.PLAYER = {

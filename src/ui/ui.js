@@ -931,6 +931,13 @@
     this.el.bbCost.innerHTML = html;
     if (res && !res.ok) {
       this.el.bbWarn.textContent = res.why;
+      this.el.bbWarn.classList.remove('good');
+      this.el.bbWarn.classList.remove('hidden');
+    } else if (res && res.note) {
+      /* Good news uses the same line — you want to know *before* you click
+         that this square is going to match the one beside it. */
+      this.el.bbWarn.textContent = '✅ ' + res.note;
+      this.el.bbWarn.classList.add('good');
       this.el.bbWarn.classList.remove('hidden');
     } else this.el.bbWarn.classList.add('hidden');
   };

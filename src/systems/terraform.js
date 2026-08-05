@@ -213,8 +213,46 @@
   /* Levelling you asked for, rather than levelling that happened under a
      building: it reaches further for a neighbouring square to match, and it
      will match one however deep the cut has to be. Laying the second block
-     against the first means you want one surface. */
-  const HAND = { step: 1e9, reach: 6 };
+     against the first means you want one surface.
+
+     The reach scales with the block, because "next to" means something
+     different for a ten-metre yard and a twenty-eight-metre plaza. */
+  const HAND = { step: 1e9 };
+  function handOpt(def) {
+    const w = def ? Math.max(def.size[0], def.size[1]) : 10;
+    return { step: HAND.step, reach: Math.max(8, w * 0.8) };
+  }
+
+  /* ---------------------------------------------------------
+     THE LATTICE
+
+     The first square goes exactly where you aim. Every one after it snaps
+     to the grid that square set up, so squares click together edge to edge
+     instead of landing wherever the crosshair happened to be — which is
+     what made matching heights feel like luck, and what turned levelling a
+     yard into a dozen careful little steps.
+     --------------------------------------------------------- */
+  Terraform.prototype.latticeAnchor = function (def, x, z) {
+    const world = this.game.world;
+    if (!world.edits.length) return null;
+    const rx = def.size[0] / 2, rz = def.size[1] / 2;
+    const w = def.size[0], d = def.size[1];
+    const span = Math.max(w, d) * 3.5;         // how far the grid keeps its hold
+    let best = null, bd = span;
+    for (const e of world.edits) {
+      // only squares laid by hand, and only ones of this same size
+      if (e.kind !== 'flat' || e.auto) continue;
+      if (Math.abs(e.rx - rx) > 0.01 || Math.abs(e.rz - rz) > 0.01) continue;
+      const dd = Math.max(Math.abs(x - e.x), Math.abs(z - e.z));
+      if (dd < bd) { bd = dd; best = e; }
+    }
+    if (!best) return null;
+    return {
+      x: best.x + Math.round((x - best.x) / w) * w,
+      z: best.z + Math.round((z - best.z) / d) * d,
+      of: best
+    };
+  };
 
   /** can this land tool be used here? mirrors Building.validate's contract */
   Terraform.prototype.check = function (def, x, z) {
@@ -228,9 +266,12 @@
       const rx = def.size[0] / 2, rz = def.size[1] / 2;
       const f = world.footprint(x, z, rx * 2, rz * 2, 0);
       if (f.max < C.WORLD.waterLevel + 0.2) return { ok: false, why: 'اینجا زیر آب است' };
-      const y = this.datumFor(x, z, f.avg, HAND);
+      const opt = handOpt(def);
+      opt.rx = rx; opt.rz = rz;
+      const y = this.datumFor(x, z, f.avg, opt);
       if (this._covered(x, z, rx, rz, y)) return { ok: false, why: 'این زمین از قبل تخت است' };
-      return { ok: true, y: y };
+      const near = this.datumNear(x, z, opt.reach, rx, rz);
+      return { ok: true, y: y, note: near ? 'هم‌تراز قطعهٔ کناری' : null };
     }
     if (t.op === 'field') {
       const y = world.heightAt(x, z);
@@ -305,9 +346,10 @@
     }
     if (t.op === 'flat') {
       const rx = def.size[0] / 2, rz = def.size[1] / 2;
+      const opt = handOpt(def);
       // ask before levelling: afterwards the nearest square is our own
-      const joined = !!this.datumNear(x, z, HAND.reach, rx, rz);
-      const e = this.level(x, z, rx, rz, { edge: t.edge, step: HAND.step, reach: HAND.reach });
+      const joined = !!this.datumNear(x, z, opt.reach, rx, rz);
+      const e = this.level(x, z, rx, rz, { edge: t.edge, step: opt.step, reach: opt.reach });
       if (!e) return null;
       return joined ? '🟩 زمین تخت شد — هم‌تراز قطعهٔ کناری' : '🟩 زمین تخت شد';
     }
