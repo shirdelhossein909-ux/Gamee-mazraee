@@ -80,6 +80,7 @@
     for (const v of this.list) {
       v.mul = v.horse ? 2.3 : 1;                  // a rider covers ground faster
       v.shopCd = Math.max(0, (v.shopCd || 0) - dt);
+      v.gateCd = Math.max(0, (v.gateCd || 0) - dt);
       if (v.skip) for (const k in v.skip) { if ((v.skip[k] -= dt) <= 0) delete v.skip[k]; }
       v.think -= dt;
       if (v.think <= 0) {
@@ -121,7 +122,14 @@
 
       /* head for the detour waypoint while one is live, otherwise the goal */
       let goalX = v.tx, goalZ = v.tz;
-      if (v.detour) {
+      /* a gate walk outranks a detour: it is the way through, not a way round */
+      if (v.gate) {
+        const p = g.building ? g.building.gateStep(v.gate, v.x, v.z, dt) : null;
+        // through (or given up): judge progress afresh from where we now are
+        if (!p) { v.gate = null; v.bestD = undefined; v.noProgress = 0; }
+        else { goalX = p.x; goalZ = p.z; v.detour = null; }
+      }
+      if (!v.gate && v.detour) {
         v.detour.t -= dt;
         if (v.detour.t <= 0 || U.dist(v.x, v.z, v.detour.x, v.detour.z) < 1.6) v.detour = null;
         else { goalX = v.detour.x; goalZ = v.detour.z; }
@@ -141,6 +149,24 @@
         if (v.workT >= C.JOB_TICK) { v.workT = 0; this._yield(v); }
       } else if (d > 1.1) {
         const step = v.speed * v.mul * dt;
+        /* Are we actually getting anywhere?
+
+           A step that succeeds is not the same as progress. Sidestepping is
+           what carries a walker around a rock, and against a town wall it
+           does its job perfectly — it finds a way past the obstacle every
+           single frame, forever, shuffling sideways along the stonework and
+           never once reporting itself blocked. That is what "the workers get
+           stuck behind the walls" looks like from the inside: not a villager
+           standing still, but a villager walking briskly and arriving
+           nowhere. So watch the distance to the goal instead of the step,
+           and when it stops shrinking, go and find the gate. */
+        if (!v.gate) {
+          const gd = Math.hypot(v.tx - v.x, v.tz - v.z);
+          if (v.bestD === undefined || gd < v.bestD - 0.3) { v.bestD = gd; v.noProgress = 0; }
+          else if ((v.noProgress = (v.noProgress || 0) + dt) > NO_PROGRESS) {
+            if (this._gateWay(v)) v.noProgress = 0;
+          }
+        }
         if (this._tryStep(v, dx / d, dz / d, step, world)) {
           moving = true;
           v.stuckT = 0;
@@ -267,8 +293,30 @@
      walk to *that* for a few seconds before resuming. Whichever way worked
      last time is tried first, so a long wall gets followed rather than
      argued with. */
+  /* Blocked, and the town has a gate: walk to the gate. Sidestepping along a
+     rampart works in the end, but a wall long enough to be worth building is
+     also long enough that "in the end" arrives after the working day does.
+
+     The waypoint is the gate itself, held long enough to actually reach it.
+     Once there the normal steering takes over, and because the gate opens for
+     anyone on your side, the straight line onward runs clean through it. */
+  const GATE_HOLD = 18;          // seconds committed to a gate walk
+  const GATE_RETRY = 22;         // …and how long before trying that gate again
+  const NO_PROGRESS = 2.5;       // seconds of walking without closing the gap
+  Villagers.prototype._gateWay = function (v) {
+    const g = this.game;
+    if (!g.building || (v.gateCd || 0) > 0) return false;
+    const walk = g.building.gateWalk(v.x, v.z, v.tx, v.tz, GATE_HOLD);
+    if (!walk) return false;
+    v.gate = walk;
+    v.gateCd = GATE_RETRY;
+    return true;
+  };
+
   Villagers.prototype._detour = function (v, dirX, dirZ, world) {
     const g = this.game;
+    // a doorway beats a scramble along the wall
+    if (this._gateWay(v)) return true;
     /* The same test a step uses, including the climb limit — offering a
        detour up a cliff face is worse than offering none, because the
        walker commits to it and then stands there for six seconds. */
@@ -445,6 +493,8 @@
     v.working = false;
     v.hasTarget = false;
     v.unstuck = 0;                    // a new target deserves a fresh budget
+    v.gate = null; v.gateCd = 0;      // and a fresh look at the doorways
+    v.bestD = undefined; v.noProgress = 0;
     const home = this.center();
 
     switch (v.job) {

@@ -113,6 +113,73 @@
     return plot;
   };
 
+  /* =========================================================
+     BUYING A FIELD
+
+     Breaking ground a tile at a time with a hoe is the honest way and it is
+     still there. But a field is the one thing in the game you were expected
+     to lay out by hand while everything else came out of the build menu, and
+     laying a twelve-metre field is seventy-two swings. These till a whole
+     block at once, paid for in coin instead of sweat — the same trade you
+     make when you hire a woodcutter instead of swinging the axe yourself.
+     ========================================================= */
+
+  /* Block sizes are odd on purpose: an odd block has a middle cell, so it
+     sits square on the tile you are aiming at and the preview covers exactly
+     the ground that gets ploughed. An even block would straddle a cell edge
+     and land half a tile off what you were shown. */
+  Farming.prototype.blockCells = function (x, z, n) {
+    const c = this.cell(x, z), half = (n - 1) / 2, out = [];
+    for (let i = -half; i <= half; i++) {
+      for (let j = -half; j <= half; j++) out.push([c.gx + i, c.gz + j]);
+    }
+    return out;
+  };
+
+  /** how many cells of an n×n block could actually be ploughed */
+  Farming.prototype.blockFits = function (x, z, n) {
+    let ok = 0, taken = 0;
+    const cells = this.blockCells(x, z, n);
+    for (const [gx, gz] of cells) {
+      if (this.plots.has(U.key(gx, gz))) { taken++; continue; }
+      if (this.canTill(gx * GS, gz * GS).ok) ok++;
+    }
+    return { ok: ok, total: cells.length, taken: taken };
+  };
+
+  /** plough a whole block. Returns how many plots were actually broken. */
+  Farming.prototype.tillBlock = function (x, z, n) {
+    let made = 0;
+    for (const [gx, gz] of this.blockCells(x, z, n)) {
+      if (this.plots.has(U.key(gx, gz))) continue;
+      if (this._till(gx * GS, gz * GS)) made++;
+    }
+    if (made) {
+      this.game.progress.addSkill('farming', made);
+      this.game.progress.stat('till', made);
+      this.game.audio.till();
+      this.game.fx.hitBurst(x, this.game.world.heightAt(x, z) + 0.3, z, 0x7a5a3a, 12);
+    }
+    return made;
+  };
+
+  /** the plot itself, with no tool, stamina or noise attached */
+  Farming.prototype._till = function (x, z) {
+    const r = this.canTill(x, z);
+    if (!r.ok) return null;
+    const plot = {
+      gx: r.gx, gz: r.gz, x: r.x, z: r.z, y: r.y,
+      crop: null, stage: 0, growth: 0, moisture: 0,
+      group: new THREE.Group(), soil: null, plant: null
+    };
+    plot.group.position.set(r.x, r.y + 0.01, r.z);
+    plot.soil = this._soil(false);
+    plot.group.add(plot.soil);
+    this.group.add(plot.group);
+    this.plots.set(U.key(r.gx, r.gz), plot);
+    return plot;
+  };
+
   Farming.prototype.plant = function (plot, seedId) {
     if (!plot || plot.crop) return false;
     const inv = this.game.inv;

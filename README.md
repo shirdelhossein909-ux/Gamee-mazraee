@@ -477,6 +477,29 @@ python3 -m http.server 8000      # یا:  npx http-server -p 8000
 
 ---
 
+### 🚜 زمین کشاورزی از منوی خرید — سه اندازه
+شخم زدن با بیل سر جایش است، ولی یک مزرعهٔ ۱۴ متری با بیل **۴۹ ضربه** است. حالا زمین
+کشاورزی هم مثل بقیهٔ چیزها از منوی ساخت (`B` ← تب مزرعه) خریده می‌شود:
+
+| | اندازه | قطعه |
+|---|---|---|
+| 🟫 کوچک | ۲×۲ متر | ۱ — دقیقاً یک ضربهٔ بیل |
+| 🌾 متوسط | ۶×۶ متر | ۹ |
+| 🚜 بزرگ | ۱۴×۱۴ متر | ۴۹ |
+
+* **اول زمین را تخت می‌کند، بعد شخم می‌زند.** بیل روی شیب تندتر از ۱٫۶ جواب نمی‌دهد،
+  برای همین مزرعهٔ بزرگ روی زمین ناهموار اول خودش تراز می‌شود. اندازه‌گیری در تست:
+  زمینی با **۳٫۶ متر پستی‌وبلندی** → کل **۴۹ قطعه** ساخته شد و **هر ۴۹ تا هم‌ارتفاع**
+  (اختلاف ۰٫۰۰۰۰۰۰) — یک بستر یکدست، نه چهل‌ونه تکه پله‌پله
+* اندازه‌ها **فرد** هستند تا وسطشان روی همان خانه‌ای بیفتد که نشانه گرفته‌ای؛ پیش‌نمایش
+  **دقیقاً** همان زمینی را می‌پوشاند که شخم می‌خورد
+* روی قطعه‌های شخم‌خوردهٔ قبلی دوباره کار نمی‌کند و پولت را هم نمی‌گیرد
+
+### 🐴 از روی اسب هم می‌شود کار کرد
+قبلاً روی اسب فقط شمشیر، کمان و غذا کار می‌کرد — بیل و بذر و آبپاش هیچ‌کدام. حالا
+**همه‌چیز از روی زین کار می‌کند**؛ فقط **چوب ماهیگیری** می‌خواهد پیاده شوی، و
+پیغام می‌دهد که چرا.
+
 ## ⛰️ زمین — تختش کن، تپه بساز
 
 تا حالا زمین فقط از روی «بذر» جهان ساخته می‌شد و هیچ کاری نمی‌شد باهاش کرد. حالا
@@ -498,6 +521,21 @@ python3 -m http.server 8000      # یا:  npx http-server -p 8000
 * **دیوارها و حصارها از این قاعده مستثنا هستند**: دیوار باید دنبال زمین برود، وگرنه
   یک ترانشهٔ تخت از دل تپه می‌بُرد. اسکله هم همین‌طور، چون به ساحلش نیاز دارد
 * اگر خوشت نمی‌آید، در **تنظیمات** خاموشش کن — «تخت‌کردن خودکار زمین زیر ساختمان»
+
+### 🧱 قطعهٔ بعدی خودش هم‌تراز قطعهٔ اول می‌شود
+اولش این‌طور نبود و ایراد داشت: هر قطعه‌ای که تخت می‌کردی **به ساز خودش می‌رقصید** و
+سطح خودش را می‌گرفت، چون فاصله از **مرکز** قطعهٔ تازه تا مرکز قطعهٔ قبلی حساب می‌شد —
+و دو قطعهٔ ۲۸ متری که کنار هم می‌نشینند، مرکزشان **۲۸ متر** فاصله دارد، پس هیچ‌وقت
+همدیگر را نمی‌دیدند.
+
+حالا فاصله **از لبه تا لبه** حساب می‌شود، پس دو قطعه که به هم می‌چسبند فاصله‌شان
+**صفر** است و همیشه به توافق می‌رسند. و چون تخت‌کردن دستی یک تصمیم آگاهانه است،
+هرقدر هم که گودبرداری لازم باشد هم‌تراز می‌شود (تخت‌کردنِ خودکار زیر ساختمان
+سخت‌گیرتر است تا یک خانه بی‌سروصدا پرتگاه را وارد شهر نکند).
+
+اندازه‌گیری در تست: سه قطعهٔ ۲۸×۲۸ پشت‌سرهم روی دامنه‌ای با **۷٫۷ متر شیب** →
+هر سه دقیقاً روی **۲۱٫۷۶۰۸۴۹** نشستند و کل سطح ۸۰ متری **۰٫۰۰۰۰۰۰** ناهمواری دارد.
+قطعه‌ای که دور باشد همچنان ارتفاع طبیعی خودش را می‌گیرد.
 
 ### 🟢 تخت‌کردن دستی، در قطعه‌های بزرگ
 تب تازهٔ **⛰️ زمین** در منوی ساخت (`B`):
@@ -549,6 +587,40 @@ python3 -m http.server 8000      # یا:  npx http-server -p 8000
 * با تخت‌کردن خودکار، همهٔ قطعه‌ها **یک ارتفاع** دارند (اندازه‌گیری: اختلاف ۰٫۰۰۰۰)
 * **روی سنگ‌فرش می‌شود ساخت:** اول میدان را فرش کن، بعد فواره را وسطش بگذار.
   (سنگ‌فرش روی سنگ‌فرش نه — آن‌وقت دیگر شبکه نیست.)
+
+### 🚪 همه از دروازه رد می‌شوند — دیگر پشت دیوار گیر نمی‌کنند
+شکایت درست بود: کارگرها پشت دیوار می‌ماندند. ولی وقتی رفتیم ببینیم چه می‌کنند،
+معلوم شد **اصلاً بی‌حرکت نایستاده بودند** — تندتند راه می‌رفتند و به هیچ‌جا
+نمی‌رسیدند. «قدم کج» که برای دور زدن یک تخته‌سنگ ساخته شده، جلوی دیوار شهر هم
+عالی کار می‌کند: هر فریم یک راه پیدا می‌کند، تا ابد، کنارِ دیوار سُر می‌خورد و
+هیچ‌وقت هم خودش را «گیرکرده» گزارش نمی‌دهد.
+
+پس حالا به‌جای موفقیت قدم، **فاصله تا مقصد** نگاه می‌شود. اگر ۲٫۵ ثانیه راه بروی
+و فاصله کم نشود، دیوار جلویت است — و جواب دیوار، دروازه است:
+
+* **مسیرِ دروازه دو نشانه دارد،** نه یکی: اول خودِ طاق، بعد یک نقطه **۵ متر آن‌طرفش**.
+  با یک نشانه، طرف می‌رسید توی طاق، بعد دوباره به مقصد نگاه می‌کرد که کنارِ دیوار
+  بود، و **دوباره به دیوار می‌خورد** — همان‌جا کنار دری که تویش ایستاده بود
+* دروازه‌ای انتخاب می‌شود که **مجموع راه** را کمینه کند، و اگر دور زدن از آن بی‌معنی
+  باشد اصلاً پیشنهاد نمی‌شود
+* **همین برای اسب‌های رام و یوزپلنگ هم هست.** باز شکاری لازم ندارد — از بالای دیوار
+  رد می‌شود
+* و یک ایراد قدیمی‌تر که همین‌جا پیدا شد: **اسب و حیوان اهلی روی دیوار سُر نمی‌خوردند.**
+  اگر قدمِ اریب مسدود بود، کل قدم لغو می‌شد؛ برای همین اسب یک متری دروازه، گوشهٔ
+  دیوار گیر می‌کرد و همان قدمِ ناممکن را تا ابد تکرار می‌کرد. حالا اگر اریب نشد،
+  تک‌تکِ محورها امتحان می‌شود — و «سُر خوردنِ صفر متری» به‌عنوان حرکت حساب **نمی‌شود**،
+  چون دقیقاً همان چیزی است که باعث می‌شد اسب خودش را سرحال گزارش کند در حالی که
+  چسبیده بود به دیوار
+
+### 💀 سطح آخرِ هر ساختمان: یک نشانِ استخوانی
+دیوارها که در سطح آخر کلاً استخوانی می‌شوند سر جایشان. حالا **هر ساختمانی** در
+**بالاترین سطح خودش** یک نشان می‌گیرد: یک جمجمهٔ کوچک روی تیزهٔ بام با دو شاخ
+دوطرفش، که **شب چشم‌هایش سرخ روشن می‌شود**.
+
+عمداً کم است — «زیاد اسکلتی نشو» یعنی همین. اندازه‌گیری: **۴۲ سانت** بلندی، **۱۷۴
+مثلث**، یعنی **۱۰٪** کل ساختمان. روی هر ۲۸ ساختمان می‌آید، **فقط** در سطح آخر، و
+روی تزئینات و سنگ‌فرش و دیوار نمی‌آید. از توی خیابان می‌بینی‌اش و می‌گوید این یکی
+تمام شده — بدون اینکه نانوایی‌ات را استخوان‌دان کند.
 
 ### 🐛 و یک باگ که موقع تست پیدا شد
 راهکارِ «کارگرِ گیرکرده را آزاد کن» که دور قبل اضافه شد، **تا ۳۰ متر** جابه‌جایش
@@ -817,9 +889,9 @@ src/systems/
   audio.js              موتور صدا: موسیقی زایشی، محیط و همهٔ افکت‌ها (بدون فایل)
   settlers.js           ساکنان، استخدام کارگر، سوارکاران و سفرهایشان
   inventory.js          آیتم‌ها، سکه، ظرفیت انبار
-  farming.js            قطعه‌های زمین، مراحل رشد، آبیاری، برداشت
+  farming.js            قطعه‌های زمین، مراحل رشد، آبیاری، برداشت، خرید مزرعهٔ آماده
   gathering.js          نشانه‌گیری، قطع درخت، معدن، نبرد، ماهیگیری، خوردن
-  building.js           جانمایی، جابه‌جایی و چرخاندن، ارتقا، تولید، برج‌های دفاعی،
+  building.js           جانمایی، جابه‌جایی و چرخاندن، ارتقا، تولید، برج‌های دفاعی، مسیرِ دروازه،
                            اتصال خودکار دیوارها، بیرون راندن هرکس که زیر ساختمان بماند
   economy.js            قیمت‌های شناور، خرید و فروش، درآمد و خوراک روزانه
   progression.js        تجربه، مهارت‌ها، ابزارها، سطح آبادی، مأموریت‌ها
@@ -979,7 +1051,38 @@ with `V`, and lead it into a stable — a real ten-stall hall, one horse per roo
 tamed horses walk to their own stall and stand in it. Working villagers borrow them to
 reach distant jobs at twice the speed.
 
-**Latest round — shaping the land:** the world's height was a pure function of the seed
+**Latest round — fields, doorways and one shared level:** farm plots are now in the build
+menu in **three sizes** — one tile, 3×3, or a full 7×7 (49 plots, 14 metres) — because a
+big field was 49 swings of a hoe while everything else in the game came out of a menu.
+A field **levels its ground before it ploughs it**, which is what makes it land in one
+piece: measured, a site with 3.6 m of relief became 49 plots all at exactly the same
+height. Block sizes are odd so the preview covers exactly the ground that gets broken.
+Every tool now works **from the saddle** too — it was blade, bow and food only, so
+farming from horseback silently did nothing; the fishing rod is the one thing that still
+asks you to dismount. **Levelling adjacent blocks now agree.** They did not: the reach
+was measured centre-to-centre, and two 28-metre squares laid side by side have centres 28
+metres apart, so the second never saw the first and picked its own level. It is measured
+edge-to-edge now, so touching blocks are zero apart and always match — three squares down
+a 7.7 m slope all landed on 21.760849, with 0.000000 of relief across the whole 80-metre
+surface. **Everyone uses the gates.** The complaint was that workers get stuck behind
+walls; watching them showed they were not standing still at all — sidestepping, which
+exists to round a boulder, works perfectly against a town wall, finding a way past every
+frame forever while never once reporting itself blocked. So progress is now judged by the
+distance to the goal, not by whether the step succeeded, and a walker that stops closing
+the gap goes and finds a gate. A gate walk has **two marks** — the arch, and a point five
+metres out the far side — because aiming at the archway lands you in the archway, and the
+next step aims at a goal off to one side and walks you straight back into the wall beside
+the door. Tame horses and your cheetah do the same. That work turned up an older fault:
+horses and pets had **no slide response** at all, so a blocked diagonal cancelled the
+whole step and pinned a horse to the corner a metre from the gate it wanted. They slide
+along walls now — and a slide of zero metres no longer counts as movement, which is what
+had them reporting themselves as walking happily while stuck fast. Finally, **every
+building wears a bone crest at its top level**: a small skull on the ridge with a horn
+either side, eye sockets lit red after dark. Deliberately restrained — 42 cm tall, 174
+triangles, a tenth of the building — on all 28 buildings, at max level only, never on
+walls or ornaments.
+
+**Previous round — shaping the land:** the world's height was a pure function of the seed
 and nothing could change it. Now it remembers exactly one thing you did to it — the
 ground you levelled and the hills you raised — and that survives the save. **Every
 building levels the ground under it**, and if there is already levelled ground within
@@ -1010,7 +1113,7 @@ worked, no target was ever written off as unreachable. It is now a nudge of a fe
 that samples the path (so it walks up a slope but not up a cliff) and gives up after two
 consecutive failures.
 
-**Previous round — the gate, and farmhands who actually farm:** the city gate is now a
+**Before that — the gate, and farmhands who actually farm:** the city gate is now a
 building rather than a plank the height of a fence — two battlemented towers with arrow
 slits, banners and lanterns, a stone fan across the arch, and **two iron-bound leaves**
 that swing from their own hinges. It stands 9.4 metres against a wall's 2.2. It **opens
@@ -1035,7 +1138,7 @@ every plot and stood idle — roughly one run in four. Blacklisting is now a 5 �
 second ladder that resets on the first success, detours respect ground height, and a
 genuinely wedged worker is freed by a spiral search.
 
-**Previous round — defence:** guards were reported as not working, and it turned out to be
+**And before that — defence:** guards were reported as not working, and it turned out to be
 three separate faults. The town "centre" was a plain average of every building, so one
 watchfire on a distant peak dragged it forty metres into empty grass and the guards
 patrolled *that*; it is now a trimmed mean that ignores outposts entirely. A villager
@@ -1083,7 +1186,7 @@ And two companions won with patience rather than coins: a **falcon** that rides 
 shoulder and dives on command, and an **Asiatic cheetah** that runs at your heel and goes
 for anything that comes at you.
 
-**Before that:** swimming now lies flat at the surface and is frame-rate independent ·
+**Earlier rounds:** swimming now lies flat at the surface and is frame-rate independent ·
 placing a building **evicts** anything caught under it, so nothing is ever walled in ·
 any placed building can be **picked up with `G`**, moved and rotated for free, keeping its
 level, unique look, damage and rotation (`ESC` puts it back) · you can swing a sword or

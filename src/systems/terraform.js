@@ -33,16 +33,25 @@
      into the single flat expanse a city wants — and it is why the
      paving lines up, because every slab shares one datum.
      --------------------------------------------------------- */
-  Terraform.prototype.datumNear = function (x, z, reach) {
+  /**
+   * The nearest platform, measured from the *edge* of the square we are about
+   * to lay to the edge of the one already there.
+   *
+   * Measuring from the centre was wrong and it showed: two 28-metre squares
+   * laid side by side have centres 28 metres apart, so the second one never
+   * saw the first and levelled itself to its own local average. Two blocks
+   * that touch have a gap of zero and always agree now.
+   */
+  Terraform.prototype.datumNear = function (x, z, reach, rx, rz) {
     const world = this.game.world;
     if (!world.edits.length) return null;
     reach = reach === undefined ? L.datumReach : reach;
+    rx = rx || 0; rz = rz === undefined ? rx : rz;
     let best = null, bd = reach;
     for (const e of world.edits) {
       if (e.kind !== 'flat') continue;
-      // distance from the point to the platform's flat core
-      const dx = Math.max(0, Math.abs(x - e.x) - e.rx);
-      const dz = Math.max(0, Math.abs(z - e.z) - e.rz);
+      const dx = Math.max(0, Math.abs(x - e.x) - e.rx - rx);
+      const dz = Math.max(0, Math.abs(z - e.z) - e.rz - rz);
       const d = Math.sqrt(dx * dx + dz * dz);
       if (d < bd) { bd = d; best = e; }
     }
@@ -50,9 +59,16 @@
   };
 
   /** the height a platform here should adopt, and why */
-  Terraform.prototype.datumFor = function (x, z, natural) {
-    const near = this.datumNear(x, z);
-    if (near && Math.abs(near.y - natural) <= L.datumStep) return near.y;
+  Terraform.prototype.datumFor = function (x, z, natural, opt) {
+    opt = opt || {};
+    const near = this.datumNear(x, z, opt.reach, opt.rx, opt.rz);
+    /* Levelling by hand is a deliberate act: if you put a second square down
+       against the first, you meant them to be one surface, and how deep the
+       cut has to be is not the game's business. Levelling that happens by
+       itself under a building is held to a tighter step, so a house never
+       silently drags a cliff into the town. */
+    const step = opt.step === undefined ? L.datumStep : opt.step;
+    if (near && Math.abs(near.y - natural) <= step) return near.y;
     return Math.max(natural, C.WORLD.waterLevel + L.minY);
   };
 
@@ -79,7 +95,9 @@
     opt = opt || {};
     const world = this.game.world;
     const f = world.footprint(x, z, rx * 2, rz * 2, 0);
-    const y = opt.y === undefined ? this.datumFor(x, z, f.avg) : opt.y;
+    const y = opt.y === undefined
+      ? this.datumFor(x, z, f.avg, { rx: rx, rz: rz, reach: opt.reach, step: opt.step })
+      : opt.y;
     if (this._covered(x, z, rx, rz, y)) return null;      // already standing on it
 
     /* How far the rim takes to melt back into the hillside has to follow how
@@ -104,7 +122,7 @@
     const world = this.game.world;
     const rx = w / 2 + L.margin, rz = d / 2 + L.margin;
     const f = world.footprint(x, z, rx * 2, rz * 2, 0);
-    const y = this.datumFor(x, z, f.avg);
+    const y = this.datumFor(x, z, f.avg, { rx: rx, rz: rz });
     // nothing to gain: the ground is already flat and already at that height
     if (f.flat <= L.skipFlat && Math.abs(f.avg - y) <= L.skipFlat) return null;
     void def;
@@ -192,6 +210,12 @@
      THE BUILD-MENU TOOLS
      --------------------------------------------------------- */
 
+  /* Levelling you asked for, rather than levelling that happened under a
+     building: it reaches further for a neighbouring square to match, and it
+     will match one however deep the cut has to be. Laying the second block
+     against the first means you want one surface. */
+  const HAND = { step: 1e9, reach: 6 };
+
   /** can this land tool be used here? mirrors Building.validate's contract */
   Terraform.prototype.check = function (def, x, z) {
     const g = this.game, world = g.world, t = def.terrain;
@@ -204,9 +228,19 @@
       const rx = def.size[0] / 2, rz = def.size[1] / 2;
       const f = world.footprint(x, z, rx * 2, rz * 2, 0);
       if (f.max < C.WORLD.waterLevel + 0.2) return { ok: false, why: 'اینجا زیر آب است' };
-      const y = this.datumFor(x, z, f.avg);
+      const y = this.datumFor(x, z, f.avg, HAND);
       if (this._covered(x, z, rx, rz, y)) return { ok: false, why: 'این زمین از قبل تخت است' };
       return { ok: true, y: y };
+    }
+    if (t.op === 'field') {
+      const y = world.heightAt(x, z);
+      if (y < C.WORLD.waterLevel + 0.4) return { ok: false, why: 'زمین زیر آب است' };
+      /* Levelling comes first, so judge the block on the ground it will have
+         rather than the ground it has — otherwise a field on a gentle slope
+         refuses itself and then flattens perfectly the moment you move on. */
+      const fits = this._fieldFits(def, x, z);
+      if (!fits.any) return { ok: false, why: fits.why };
+      return { ok: true, y: y, fits: fits.ok };
     }
     // a hill would bury whatever is standing there
     const r = t.r;
@@ -222,13 +256,60 @@
     return { ok: true, y: world.heightAt(x, z) };
   };
 
+  /* Would this field take? Anything already ploughed is fine — it just does
+     not get ploughed twice — and slopes are forgiven by the width of what
+     levelling is about to do to them. */
+  Terraform.prototype._fieldFits = function (def, x, z) {
+    const g = this.game;
+    const n = def.terrain.n;
+    const f = g.farming.blockFits(x, z, n);
+    if (f.taken === f.total) return { any: false, why: 'اینجا از قبل شخم خورده' };
+    if (f.ok === 0) {
+      // levelling will fix a slope; a building or the sea it will not
+      const free = f.total - f.taken;
+      if (this._willLevelField(def, x, z)) return { any: true, ok: free };
+      return { any: false, why: 'زمین اینجا خیلی شیب‌دار یا اشغال است' };
+    }
+    return { any: true, ok: f.ok };
+  };
+
+  Terraform.prototype._willLevelField = function (def, x, z) {
+    if (!G.Settings.get('autoLevel')) return false;
+    const w = this.game.world;
+    const half = def.size[0] / 2;
+    // nothing to level onto if it is water or somebody's roof
+    for (let i = -1; i <= 1; i++) {
+      for (let j = -1; j <= 1; j++) {
+        const px = x + i * half, pz = z + j * half;
+        if (w.heightAt(px, pz) < C.WORLD.waterLevel + 0.4) return false;
+        if (this.game.building.occupied(px, pz)) return false;
+      }
+    }
+    return true;
+  };
+
   /** run the tool. Returns a message for the toast, or null on failure. */
   Terraform.prototype.apply = function (def, x, z) {
     const t = def.terrain;
     if (t.op === 'undo') return this.restoreAt(x, z) ? '↩️ زمین به شکل طبیعی خودش برگشت' : null;
+    if (t.op === 'field') {
+      /* Flatten first: a field wants to be one even bed, and the hoe refuses
+         a slope steeper than it can plough. This is what makes a big field
+         land in one piece on ground you would otherwise have to terrace. */
+      if (G.Settings.get('autoLevel')) {
+        this.level(x, z, def.size[0] / 2, def.size[1] / 2, { auto: true });
+      }
+      const made = this.game.farming.tillBlock(x, z, t.n);
+      if (!made) return null;
+      return '🌾 ' + U.fa(made) + ' قطعه زمین آماده شد';
+    }
     if (t.op === 'flat') {
-      const e = this.level(x, z, def.size[0] / 2, def.size[1] / 2, { edge: t.edge });
-      return e ? '🟩 زمین تخت شد' : null;
+      const rx = def.size[0] / 2, rz = def.size[1] / 2;
+      // ask before levelling: afterwards the nearest square is our own
+      const joined = !!this.datumNear(x, z, HAND.reach, rx, rz);
+      const e = this.level(x, z, rx, rz, { edge: t.edge, step: HAND.step, reach: HAND.reach });
+      if (!e) return null;
+      return joined ? '🟩 زمین تخت شد — هم‌تراز قطعهٔ کناری' : '🟩 زمین تخت شد';
     }
     return this.raise(x, z, t) ? '⛰️ ' + def.name + ' بالا آمد' : null;
   };

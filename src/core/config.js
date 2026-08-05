@@ -624,6 +624,21 @@
     { op: 'undo' }, 8, {},
     'زمینی که تخت کرده‌ای یا تپه‌ای که ساخته‌ای را به شکل طبیعی خودش برمی‌گرداند. نشانه بگیر و کلیک کن.');
 
+  /* Fields you buy instead of ploughing. `n` is the block in tiles a side;
+     one tile is one grid cell, exactly what a swing of the hoe breaks. */
+  const field = (id, name, icon, n, price, mats, desc, sk) => bld({
+    id: id, name: name, icon: icon, cat: 'farm', model: 'fieldpad',
+    size: [n * C.WORLD.gridSize, n * C.WORLD.gridSize],
+    max: 1, tier: 0, sk: sk || 0, terrain: { op: 'field', n: n }, desc: desc,
+    cost: () => Object.assign({}, mats, { coin: price })
+  });
+  field('field_s', 'زمین کشاورزی (کوچک)', '🟫', 1, 4, {},
+    'یک قطعه — دقیقاً همان‌قدر که یک ضربهٔ بیل شخم می‌زند. برای وقتی که فقط یک گوشه کم داری.');
+  field('field_m', 'زمین کشاورزی (متوسط)', '🌾', 3, 26, { wood: 2 },
+    'یک بلوک ۳×۳ — ۹ قطعه در ۶×۶ متر، با یک کلیک. زمین ناهموارش هم اول خودش تخت می‌شود.');
+  field('field_l', 'زمین کشاورزی (بزرگ)', '🚜', 7, 120, { wood: 8, iron: 1 },
+    'یک مزرعهٔ کامل ۷×۷ — ۴۹ قطعه در ۱۴×۱۴ متر. زمینش اول تخت می‌شود، بعد کشاورزها بقیه‌اش را خودشان می‌گردانند.', 1);
+
   /* size, height and looks of every hill you can buy */
   const HILLS = [
     ['sand', 'شنی', '🏜️', 'تپهٔ ماسه‌ای نرم و بی‌درخت، رنگ کویر.', 0xd9c07e],

@@ -295,9 +295,22 @@
     }
   };
 
+  /* A cheetah at your heel is one of yours, and yours use the gate. (A falcon
+     never needs one — it is already over the wall.) */
+  const GATE_HOLD = 16, GATE_RETRY = 18;
+  Companions.prototype._gateWay = function (c, tx, tz) {
+    const g = this.game;
+    if (!g.building || c.gateCd > 0) return;
+    const walk = g.building.gateWalk(c.x, c.z, tx, tz, GATE_HOLD);
+    if (!walk) return;
+    c.gate = walk;
+    c.gateCd = GATE_RETRY;
+  };
+
   Companions.prototype._stepRoam = function (c, dt, world, p) {
     const pd = U.dist(c.x, c.z, p.x, p.z);
     c.timer -= dt;
+    c.gateCd = Math.max(0, (c.gateCd || 0) - dt);
     let wantX = 0, wantZ = 0, speed = 0;
 
     if (!c.tame && pd < c.def.spookRange && c.spook <= 0) {
@@ -324,7 +337,14 @@
       }
       if (!c.rest) { wantX = Math.sin(c.wanderYaw); wantZ = Math.cos(c.wanderYaw); speed = c.kind === 'falcon' ? 2.4 : 4.2; }
     }
+    const heeling = c.tame && c.kind !== 'falcon' && speed > 0.2;
+    if (c.gate) {
+      const p = this.game.building ? this.game.building.gateStep(c.gate, c.x, c.z, dt) : null;
+      if (!p) c.gate = null;
+      else if (heeling) { wantX = p.x - c.x; wantZ = p.z - c.z; }
+    }
     this._move(c, wantX, wantZ, speed, dt, world);
+    if (c.blocked && heeling && !c.gate) this._gateWay(c, p.x, p.z);
     this._pose(c, dt, speed > 0.2);
   };
 
@@ -363,15 +383,30 @@
     }
     const dx = (wantX / wl) * speed, dz = (wantZ / wl) * speed;
     const nx = c.x + dx * dt, nz = c.z + dz * dt;
-    const nh = world.heightAt(nx, nz);
     /* A falcon off the glove is a falcon in the air: it clears walls and
        rooftops on the way out and on the way home. Walking one back to your
        arm through a built-up town leaves it stuck against the first house. */
     const airborne = c.kind === 'falcon' && (fly || c.tame);
-    const blocked = !airborne && (nh < W.waterLevel + 0.15 || Math.abs(nh - (c.y - this._lift(c))) > 2.2 ||
-      (this.game.building && this.game.building.blocks(nx, nz, true)));
-    if (blocked) { c.timer = 0; c.wanderYaw = Math.random() * 6.283; c.moving = false; }
-    else { c.x = nx; c.z = nz; c.moving = true; }
+    const g = this.game;
+    const foot = c.y - this._lift(c);
+    const ok = (mx, mz) => {
+      if (airborne) return true;
+      const mh = world.heightAt(mx, mz);
+      if (mh < W.waterLevel + 0.15 || Math.abs(mh - foot) > 2.2) return false;
+      return !(g.building && g.building.blocks(mx, mz, true));
+    };
+    /* Slide along a wall rather than stalling square against it — and a slide
+       of zero metres is not a slide, it is standing still with a good excuse */
+    const ox = c.x, oz = c.z;
+    let ax = ox, az = oz;
+    if (ok(nx, nz)) { ax = nx; az = nz; }
+    else if (Math.abs(nx - ox) > 1e-4 && ok(nx, oz)) ax = nx;
+    else if (Math.abs(nz - oz) > 1e-4 && ok(ox, nz)) az = nz;
+    const moved = ax !== ox || az !== oz;
+    if (moved) { c.x = ax; c.z = az; c.moving = true; }
+    else { c.timer = 0; c.wanderYaw = Math.random() * 6.283; c.moving = false; }
+    c.blocked = !moved;
+    const nh = world.heightAt(c.x, c.z);
     const target = airborne ? nh + 5.5 : this._restY(c, world);
     c.y = U.damp(c.y, target, 5, dt);
     c.yaw += U.angleDelta(c.yaw, Math.atan2(dx, dz)) * Math.min(1, dt * 7);

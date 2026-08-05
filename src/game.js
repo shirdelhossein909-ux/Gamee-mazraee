@@ -428,10 +428,14 @@
       if (this.farming.moving) this.farming.confirmMove();
       else if (this.building.placing) this.building.confirm();
       else if (this.player.mount) {
-        /* One hand on the reins is enough for a blade, a bow or a bite —
-           hunting from the saddle is half the point of having a horse. */
+        /* One hand on the reins is enough for anything you do from the
+           saddle — a blade, a bow, a hoe, a handful of seed. Only the
+           fishing rod wants both feet on the bank. */
         const tool = ui.currentTool();
-        if (tool === 'sword' || tool === 'bow' || tool === 'food') {
+        if (tool === 'rod') {
+          ui.toast('🎣 برای ماهیگیری باید پیاده شوی (کلید V)', 'bad');
+          this.audio.deny();
+        } else {
           ui.swingSlot();
           this.gather.use(tool);
         }

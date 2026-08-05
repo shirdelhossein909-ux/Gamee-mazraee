@@ -2072,6 +2072,24 @@
     return assemble(p, true);
   };
 
+  /* A field you are about to buy: ploughed soil with furrows drawn on it, so
+     the preview tells you the block size at a glance. */
+  BM.fieldpad = function (l, def) {
+    const w = (def && def.size[0]) || 2, d = (def && def.size[1]) || w;
+    const p = [];
+    p.push({ g: P.box, c: COL.dirt, p: [0, 0.06, 0], s: [w, 0.12, d] });
+    const rows = Math.max(2, Math.round(d / 0.9));
+    for (let i = 0; i < rows; i++) {
+      const z = -d / 2 + (i + 0.5) * (d / rows);
+      p.push({ g: P.box, c: COL.dirtWet, p: [0, 0.14, z], s: [w - 0.2, 0.06, d / rows * 0.45] });
+    }
+    for (let s = -1; s <= 1; s += 2) {
+      p.push({ g: P.box, c: COL.woodDark, p: [s * w / 2, 0.22, 0], s: [0.16, 0.44, d] });
+      p.push({ g: P.box, c: COL.woodDark, p: [0, 0.22, s * d / 2], s: [w, 0.44, 0.16] });
+    }
+    return assemble(p, true);
+  };
+
   BM.hillghost = function (l, def) {
     const t = (def && def.terrain) || {};
     const r = t.r || 10, peak = t.peak || 6;
@@ -2207,11 +2225,56 @@
 
   M.BUILDERS = BM;
 
+  /* =========================================================
+     THE CREST OF THE LAST LEVEL
+
+     Walls and gates change material outright at the top of their ladder.
+     Every other building gets something quieter: a single skull set on the
+     ridge with a horn either side, eye sockets lit red after dark. It reads
+     across a rooftop and says "this one is finished" without turning your
+     bakery into an ossuary — a crest, not a costume.
+
+     It is measured off the finished model, so it lands correctly on a roof
+     nobody wrote it for.
+     ========================================================= */
+  const _crestBox = new THREE.Box3();
+  function crest(g, level, def) {
+    if (!def || level < (def.max || 1) || (def.max || 1) < 2) return;
+    if (def.connects || def.terrain) return;      // walls wear the whole skin
+    if (def.decor || def.walkOver) return;        // an ornament needs no ornament
+    _crestBox.setFromObject(g);
+    const w = _crestBox.max.x - _crestBox.min.x;
+    const d = _crestBox.max.z - _crestBox.min.z;
+    const top = _crestBox.max.y;
+    if (!isFinite(top) || !isFinite(w)) return;
+    /* one size for a lamp post, one for a town hall, and never so big it
+       stops looking like an ornament. Half a metre of skull on a roof reads
+       from the street; a metre of it turns the bakery into a shrine. */
+    const s = Math.min(0.62, Math.max(0.3, Math.min(w, d) * 0.12));
+    const p = [];
+    const cz = (_crestBox.min.z + _crestBox.max.z) * 0.5;
+    const front = cz + Math.min(d * 0.5, 0.3 * s);
+    const y = top + 0.3 * s;
+    skullParts(p, 0, y, front, s);
+    for (const sx of [-1, 1]) {
+      p.push({
+        g: P.cone5, c: SKIN.bone.dark,
+        p: [sx * 0.5 * s, y + 0.1 * s, front - 0.05 * s],
+        r: [0, 0, -sx * 0.9], s: [0.15 * s, 0.4 * s, 0.15 * s]
+      });
+    }
+    p.push({ g: P.box, c: SKIN.bone.dark, p: [0, y - 0.46 * s, front - 0.04 * s], s: [1.0 * s, 0.13 * s, 0.18 * s] });
+    const acc = assemble(p);
+    acc.name = 'crest';
+    g.add(acc);
+  }
+
   /** main entry: build a building model by definition + level */
   M.building = function (defId, level, mask, variant) {
     const def = C.BUILDINGS[defId];
     const fn = BM[def.model] || BM.shed;
     const g = fn(level || 1, def, mask, variant || 0);
+    crest(g, level || 1, def);
     g.userData.defId = defId;
     return g;
   };

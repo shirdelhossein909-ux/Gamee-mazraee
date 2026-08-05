@@ -351,10 +351,24 @@
     }
   };
 
+  /* A tame horse is one of yours, and yours walk through the gate. Left to
+     itself a blocked horse just picks a new random heading, which against a
+     town wall means it mills about outside until you come and get it. */
+  const GATE_HOLD = 18, GATE_RETRY = 20;
+  Horses.prototype._gateWay = function (h, tx, tz) {
+    const g = this.game;
+    if (!g.building || h.gateCd > 0) return;
+    const walk = g.building.gateWalk(h.x, h.z, tx, tz, GATE_HOLD);
+    if (!walk) return;
+    h.gate = walk;
+    h.gateCd = GATE_RETRY;
+  };
+
   Horses.prototype._roam = function (h, dt, world, p) {
     const pd = U.dist(h.x, h.z, p.x, p.z);
     h.timer -= dt;
     h.spook = Math.max(0, h.spook - dt);
+    h.gateCd = Math.max(0, (h.gateCd || 0) - dt);
 
     let wantX = 0, wantZ = 0, speed = 0;
     if (!h.tame && pd < H.spookRange && h.spook <= 0) {
@@ -389,7 +403,22 @@
       }
       if (!h.graze) { wantX = Math.sin(h.wanderYaw); wantZ = Math.cos(h.wanderYaw); speed = 2.2; }
     }
-    this._step(h, wantX, wantZ, speed, dt, world, h.stabled && !!h.home);
+    /* Somewhere it is actually trying to get to — the only case a gate helps.
+       A horse mooching about a meadow has no goal to be blocked from. */
+    let goalX = 0, goalZ = 0, purposeful = false;
+    if (h.tame && !h.stabled && !this.mounted && pd > 6 && pd < 70) {
+      goalX = p.x; goalZ = p.z; purposeful = true;                 // following you
+    } else if (h.tame && h.stabled && h.home && U.dist(h.x, h.z, h.home.x, h.home.z) > 2) {
+      goalX = h.home.x; goalZ = h.home.z; purposeful = true;       // heading for its box
+    }
+
+    if (h.gate) {
+      const p = this.game.building ? this.game.building.gateStep(h.gate, h.x, h.z, dt) : null;
+      if (!p) h.gate = null;
+      else if (purposeful) { wantX = p.x - h.x; wantZ = p.z - h.z; }
+    }
+    const blocked = this._step(h, wantX, wantZ, speed, dt, world, h.stabled && !!h.home);
+    if (blocked && purposeful && !h.gate) this._gateWay(h, goalX, goalZ);
     this._pose(h, dt, speed > 0.2);
   };
 
@@ -408,22 +437,40 @@
     if (wl < 0.0001 || speed < 0.05) {
       h.y = world.heightAt(h.x, h.z);
       h.moving = false;
-      return;
+      return false;
     }
     const dx = (wantX / wl) * speed, dz = (wantZ / wl) * speed;
     const nx = h.x + dx * dt, nz = h.z + dz * dt;
-    const nh = world.heightAt(nx, nz);
     /* A horse heading for its own box walks in through the stable door —
-       the hall is solid to everything else. */
-    /* A horse is one of yours: it walks through your own gate, down your
-       own stable aisle and across your own garden, like everything else
-       that belongs to the town. */
-    const blocked = nh < W.waterLevel + 0.2 || Math.abs(nh - h.y) > 2.2 ||
-      (!ghost && this.game.building && this.game.building.blocks(nx, nz, true));
-    if (blocked) { h.timer = 0; h.wanderYaw = Math.random() * 6.283; h.moving = false; }
-    else { h.x = nx; h.z = nz; h.y = nh; h.moving = true; }
+       the hall is solid to everything else. A horse is one of yours: it walks
+       through your own gate, down your own stable aisle and across your own
+       garden, like everything else that belongs to the town. */
+    const g = this.game;
+    const ok = (mx, mz) => {
+      const mh = world.heightAt(mx, mz);
+      if (mh < W.waterLevel + 0.2 || Math.abs(mh - h.y) > 2.2) return false;
+      return !(!ghost && g.building && g.building.blocks(mx, mz, true));
+    };
+    /* Slide along what you cannot walk through. Refusing the whole step
+       because the diagonal is blocked is what pins a horse to the corner of
+       a wall a metre from the gate it was heading for.
+
+       A slide only counts if it actually goes somewhere: when the want is
+       straight north, the "x only" fallback is a step of zero metres, and
+       calling that success would report the horse as walking happily while
+       it stood still against the wall — which is precisely the state the
+       gate walk exists to notice. */
+    const ox = h.x, oz = h.z;
+    let ax = ox, az = oz;
+    if (ok(nx, nz)) { ax = nx; az = nz; }
+    else if (Math.abs(nx - ox) > 1e-4 && ok(nx, oz)) ax = nx;
+    else if (Math.abs(nz - oz) > 1e-4 && ok(ox, nz)) az = nz;
+    const moved = ax !== ox || az !== oz;
+    if (moved) { h.x = ax; h.z = az; h.y = world.heightAt(ax, az); h.moving = true; }
+    else { h.timer = 0; h.wanderYaw = Math.random() * 6.283; h.moving = false; }
     h.yaw += U.angleDelta(h.yaw, Math.atan2(dx, dz)) * Math.min(1, dt * 6);
     h.phase += dt * (2.2 + speed * 0.8);
+    return !moved;
   };
 
   Horses.prototype._pose = function (h, dt, moving) {

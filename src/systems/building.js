@@ -249,7 +249,79 @@
     }
     return this._effCache[key] || 0;
   };
-  Building.prototype.invalidate = function () { this._effCache = null; };
+  Building.prototype.invalidate = function () { this._effCache = null; this._gates = null; };
+
+  /* =========================================================
+     GATES AS DOORWAYS
+
+     A wall is only useful if it is closed, and a closed wall is a maze to
+     anyone walking. Sidestepping along it finds the way round eventually,
+     but "eventually" is the difference between a carter who delivers and a
+     carter who stands in a field all afternoon.
+
+     So anything on your side that finds itself blocked heads for a gate
+     instead of arguing with the stonework. It is the same answer a person
+     would give: you do not climb the wall, you walk to the gate.
+     ========================================================= */
+  Building.prototype.gates = function () {
+    if (!this._gates) {
+      this._gates = this.list.filter(function (b) { return b.def.gateway; });
+    }
+    return this._gates;
+  };
+
+  /* How much longer a trip may get by going via a gate before it stops being
+     worth it. Generous, because the alternative is not a shorter walk — it is
+     no walk at all. */
+  const GATE_SLACK = 2.6, GATE_FIXED = 14;
+
+  /** the gate that best serves a trip from (x,z) to (tx,tz), or null */
+  Building.prototype.gateFor = function (x, z, tx, tz) {
+    const gs = this.gates();
+    if (!gs.length) return null;
+    const direct = U.dist(x, z, tx, tz);
+    let best = null, bd = direct * GATE_SLACK + GATE_FIXED;
+    for (const b of gs) {
+      const via = U.dist(x, z, b.x, b.z) + U.dist(b.x, b.z, tx, tz);
+      if (via < bd) { bd = via; best = b; }
+    }
+    return best;
+  };
+
+  /* Walking to the gate is not the same as walking through it. Aim at the
+     archway and you arrive in the archway — then the next step aims at the
+     goal, which is off to one side, and you walk straight back into the wall
+     beside the door you were standing in. So a gate walk has two marks: the
+     arch, and a point out the far side of it. Only the second one means you
+     are through. */
+  const GATE_THROUGH = 5;        // metres past the arch on the far side
+  const GATE_AT = 2.4, GATE_OUT = 1.8;
+
+  Building.prototype.gateWalk = function (x, z, tx, tz, hold) {
+    const b = this.gateFor(x, z, tx, tz);
+    if (!b) return null;
+    if (U.dist(x, z, b.x, b.z) < GATE_AT) return null;   // already in the doorway
+    const dx = tx - b.x, dz = tz - b.z;
+    const d = Math.hypot(dx, dz) || 1;
+    return {
+      uid: b.uid, t: hold || 14, stage: 0,
+      inX: b.x, inZ: b.z,
+      outX: b.x + dx / d * GATE_THROUGH, outZ: b.z + dz / d * GATE_THROUGH
+    };
+  };
+
+  /** where to steer for this gate walk right now, or null when it is over */
+  Building.prototype.gateStep = function (w, x, z, dt) {
+    if (!w) return null;
+    w.t -= dt;
+    if (w.t <= 0) return null;
+    if (w.stage === 0) {
+      if (U.dist(x, z, w.inX, w.inZ) > GATE_AT) return { x: w.inX, z: w.inZ };
+      w.stage = 1;
+    }
+    if (U.dist(x, z, w.outX, w.outZ) < GATE_OUT) return null;   // through
+    return { x: w.outX, z: w.outZ };
+  };
 
   /* =========================================================
      WALL CONNECTIONS
