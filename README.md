@@ -477,6 +477,91 @@ python3 -m http.server 8000      # یا:  npx http-server -p 8000
 
 ---
 
+## ⛰️ زمین — تختش کن، تپه بساز
+
+تا حالا زمین فقط از روی «بذر» جهان ساخته می‌شد و هیچ کاری نمی‌شد باهاش کرد. حالا
+دنیا **یک چیز را از تو به یاد می‌آورد**: هر جایی که تخت کرده‌ای و هر تپه‌ای که
+ساخته‌ای. این‌ها توی فایل ذخیره می‌مانند و دفعهٔ بعد **دقیقاً** همان‌جا هستند.
+
+### 🟩 زمین شهرت کاملاً تخت می‌شود — خودکار
+هر ساختمانی که می‌گذاری، **زیر پایش را تخت می‌کند** و لبه‌اش را نرم به زمین اطراف
+می‌رساند. ولی مهم‌تر از آن: اگر کنارِ ساختمانِ تازه **زمین تخت‌شدهٔ دیگری** باشد
+(تا ۱۲ متری)، به‌جای اینکه ایوان خودش را بسازد، **هم‌ترازِ همان** می‌شود.
+
+نتیجه‌اش این است که شهری که روی دامنه می‌سازی **پله‌پله نمی‌شود** — یک سطح یکدست
+از آب درمی‌آید. اندازه‌گیری در تست: زمینی با **۴ متر پستی‌وبلندی**، بعد از گذاشتن
+یک خانه **صفر**؛ و هفت ساختمان بعدیِ دور تا دورش، **هر هفت‌تا دقیقاً هم‌تراز**
+(اختلاف ۰٫۰۰۰۰).
+
+* ساختمان روی زمینی که قرار است تخت شود، **دو برابر ناهمواری** را تحمل می‌کند —
+  ولی پرتگاه هنوز جواب «نه» می‌گیرد
+* **دیوارها و حصارها از این قاعده مستثنا هستند**: دیوار باید دنبال زمین برود، وگرنه
+  یک ترانشهٔ تخت از دل تپه می‌بُرد. اسکله هم همین‌طور، چون به ساحلش نیاز دارد
+* اگر خوشت نمی‌آید، در **تنظیمات** خاموشش کن — «تخت‌کردن خودکار زمین زیر ساختمان»
+
+### 🟢 تخت‌کردن دستی، در قطعه‌های بزرگ
+تب تازهٔ **⛰️ زمین** در منوی ساخت (`B`):
+
+| | اندازه | کار |
+|---|---|---|
+| 🟩 تخت‌کردن زمین (کوچک) | ۱۰×۱۰ | یک حیاط |
+| 🟢 تخت‌کردن زمین (بزرگ) | ۲۸×۲۸ | یک میدان |
+| ↩️ بازگرداندن زمین | — | هر تغییری را به شکل طبیعی خودش برمی‌گرداند |
+
+* وسط قطعه **تا آخرین میلی‌متر تخت** است (اندازه‌گیری: اختلاف ارتفاع **۰٫۰۰۰۰۰۰**)
+* لبه‌اش **به‌اندازهٔ خاکی که جابه‌جا شده پهن می‌شود** — یک میدان که ۵ متر توی
+  دامنه بریده شده، به‌جای پرتگاه با یک **سراشیبیِ قابل‌رفتن** تمام می‌شود
+* زمین تخت‌شده **هیچ‌وقت زیر آب نمی‌ماند** و **دیگر رویش درخت و سنگ سبز نمی‌شود** —
+  زمینِ آماده است، نه علفزار
+* مثل حصار، ابزار **در دستت می‌ماند** تا هرچقدر خواستی پشت‌سرهم بزنی
+
+### 🏔️ ۵ نوع تپه، هرکدام کوچک و بزرگ
+حالا می‌توانی **کوه بخری**. هرکدام رنگ و پوشش و شکل خودش را دارد:
+
+| | کوچک | بزرگ |
+|---|---|---|
+| 🏜️ تپهٔ شنی | شعاع ۹ · بلندی ۵٫۵ | شعاع ۲۴ · بلندی **۱۷** |
+| 🪨 تپهٔ سنگی | ناهموار، با تخته‌سنگ | ناهموار، رگه‌های معدن |
+| 🏔️ تپهٔ برفی | تاج سفید، کاج | تاج سفید، کاج |
+| 🌼 تپهٔ پرگل | سرتاسر گل وحشی | **صدها** گل رنگ‌به‌رنگ |
+| ⛰️ کوه | تیز و بلند | شعاع ۲۴ · بلندی **۳۲**، با تاج برفی |
+
+* **جنس زمین با تپه عوض می‌شود**: شنی رنگ کویر می‌گیرد، سنگی کوهستان، برفی برف‌گیر،
+  و پرگل یک **زیست‌بوم تازه به اسم «گلزار»**. کوه از یک ارتفاعی به بالا **برفی**
+  می‌شود، پایینش سنگی می‌ماند
+* درخت و سنگ و معدن **خودشان با تپه هماهنگ می‌شوند** — روی تپهٔ برفی کاج در می‌آید،
+  روی سنگی تخته‌سنگ و رگه
+* دامنه‌اش با **نویز خشن** شکسته می‌شود تا مثل کاسه‌ای برعکس به‌نظر نیاید؛ کوه
+  خشن‌ترین است و تپهٔ شنی نرم‌ترین
+* **لبه‌اش طبیعی است:** رنگ و شکل تپه فقط تا جایی می‌رود که واقعاً بلند است؛
+  حاشیه‌اش به همان چیزی برمی‌گردد که قبلش بوده
+* تپه روی ساختمان یا زمین کشاورزی **ساخته نمی‌شود** (رویشان را می‌پوشاند)
+
+### ⬜ سنگ‌فرش یکدست شد
+هر قطعه سنگ‌فرش **دقیقاً ۲×۲ را پر می‌کند** (قبلاً ۱٫۸۴ بود، یعنی بین هر دو قطعه
+۱۶ سانت درز)، روی یک **کف یک‌تکه** نشسته تا از بند بین سنگ‌ها زمین دیده نشود، و:
+
+* روی **شبکهٔ دو متری خودش** می‌نشیند، پس هرگز نصف‌ونیمه روی هم نمی‌افتد
+* **نمی‌چرخد** — چرخاندن یک نقش تکرارشونده دقیقاً همان کاری است که درز درست می‌کند
+* نقش سه‌رنگش طوری انتخاب شده که **از روی درز رد می‌شود**: هر قطعه سه کاشی پهناست و
+  الگو با سه‌تا سه‌تا جابه‌جا شدن عوض نمی‌شود، پس یک میدان **یک کف** به‌نظر می‌آید
+  نه چهل تا مُهر کنار هم
+* با تخت‌کردن خودکار، همهٔ قطعه‌ها **یک ارتفاع** دارند (اندازه‌گیری: اختلاف ۰٫۰۰۰۰)
+* **روی سنگ‌فرش می‌شود ساخت:** اول میدان را فرش کن، بعد فواره را وسطش بگذار.
+  (سنگ‌فرش روی سنگ‌فرش نه — آن‌وقت دیگر شبکه نیست.)
+
+### 🐛 و یک باگ که موقع تست پیدا شد
+راهکارِ «کارگرِ گیرکرده را آزاد کن» که دور قبل اضافه شد، **تا ۳۰ متر** جابه‌جایش
+می‌کرد — یعنی یک تلپورت که با چشم می‌دیدی — و چون همیشه جواب می‌داد، هیچ هدفی
+**هیچ‌وقت** به‌عنوان دست‌نیافتنی کنار گذاشته نمی‌شد. حالا:
+
+* فقط **چند متر** هُلش می‌دهد، نه سی متر
+* **مسیر را نمونه‌برداری می‌کند**، پس از سرازیری بالا می‌رود ولی از دیوارهٔ صخره نه
+* بعد از **دو بار پشت‌سرهم** که آزاد شدن هم فایده نداشت، هدف واقعاً دست‌نیافتنی
+  است و کنار گذاشته می‌شود (با اولین قدمِ موفق، شمارنده صفر می‌شود)
+
+---
+
 ### 🏯 دروازهٔ شهر — بزرگ، دو لنگه، و بالاخره باز می‌شود
 دروازه‌ها باز و بسته نمی‌شدند. حالا دروازه **یک بنای واقعی است**، نه یک تختهٔ
 هم‌قد حصار:
@@ -741,6 +826,7 @@ src/systems/
   chronicle.js          وقایع‌نامه: تاریخ شهر به فارسی، با تاریخ درست
   myth.js               سیمرغ و آیین ماه کامل، دیو سپید، رؤیا و گنج
   disasters.js          زلزله: هشدار، لرزش دوربین، آسیب بر اساس جنس بنا
+  terraform.js          تخت‌کردن زمین، ساخت تپه، هم‌ترازی خودکار زیر ساختمان‌ها
   settings.js           گرافیک، صدا و حساسیت — ذخیرهٔ جدا از فایل بازی
   save.js               ذخیره/بارگذاری روی localStorage
 
@@ -763,6 +849,8 @@ C.TIME  = { dayLength: 720, ... }   // طول یک شبانه‌روز به ثا
   (بازار، بذر، مدل سه‌بعدی، مأموریت) خودکار آن را می‌شناسد.
 * **افزودن ساختمان جدید:** یک `bld({...})` بنویس و `model` را روی یکی از سازنده‌های
   موجود در `props.js` بگذار (یا یک سازندهٔ تازه به `BM` اضافه کن).
+* **افزودن تپهٔ تازه:** یک ردیف به `HILLS` در `config.js` و یک شکل به `HILL` در
+  `terrain.js` اضافه کن — بقیه‌اش (منوی خرید، رنگ زمین، درخت‌ها، ذخیره) خودکار است.
 * **جهان سخت‌تر/آسان‌تر:** مقدارهای `hp`، `cost` و `C.ANIMALS` را تغییر بده.
 
 ---
@@ -859,7 +947,9 @@ raids scale with your town's power, unlocking heavier beasts as you grow · self
 fences, walls and gates that form seamless runs with proper corners · guard towers and
 bow-armed guards · fishing mini-game · swimming, a free rowing boat and a purchasable
 car · a full-screen pannable/zoomable world map with numbered waypoints · unrestricted
-building anywhere in the world · daylight lasting twice as long as night · 28
+building anywhere in the world · terrain you can shape — level the ground flat in blocks
+and raise sandy, rocky, snowy, flowered or snow-capped mountain hills, all saved with
+your world · daylight lasting twice as long as night · 28
 upgradeable buildings across 5 levels with production chains · residents vs. housing,
 hireable workers and mounted recruiters who ride out on multi-day expeditions to bring
 displaced people home · a council table where you assign every villager a real job
@@ -889,7 +979,38 @@ with `V`, and lead it into a stable — a real ten-stall hall, one horse per roo
 tamed horses walk to their own stall and stand in it. Working villagers borrow them to
 reach distant jobs at twice the speed.
 
-**Latest round — the gate, and farmhands who actually farm:** the city gate is now a
+**Latest round — shaping the land:** the world's height was a pure function of the seed
+and nothing could change it. Now it remembers exactly one thing you did to it — the
+ground you levelled and the hills you raised — and that survives the save. **Every
+building levels the ground under it**, and if there is already levelled ground within
+twelve metres it **joins that instead of terracing its own**, so a town built down a
+hillside comes out as one continuous flat plane rather than a staircase. Measured: a
+site with four metres of relief goes to dead flat under the first house, and the seven
+buildings placed around it all sit at exactly the same height (delta 0.0000). Walls and
+fences opt out — a rampart should follow the land, not cut a level trench through it —
+and the whole thing has a settings toggle. A new **⛰️ land tab** in the build menu adds
+deliberate work: **flatten in 10×10 or 28×28 blocks** (flat to within 0.000000 across the
+core, and the rim widens with the earth moved, so a plaza cut five metres into a slope
+ends on a bank you can walk up rather than a cliff), and **undo**, which puts any of it
+back the way nature had it. Levelled ground is prepared ground: nothing grows back on it.
+And you can **buy hills** — sandy, rocky, snowy, flower-covered, and a proper 32-metre
+snow-capped **mountain** — each in a small and a large size. A hill brings its own skin
+with it: the ground turns desert, rocky, snow or a new **meadow** biome, the trees and ore
+that spawn on it follow suit, the mountain goes white above a height line, ridged noise
+breaks the slope so it never looks lathe-turned, and the rim fades back into whatever was
+there before. A flowered hillside gets hundreds of real wildflowers, merged into one draw
+call per chunk. **Paving is seamless now**: each piece fills its full two metres (it was
+1.84, leaving a 16 cm gutter at every seam), sits on a solid bed so no ground shows
+through the mortar, snaps to its own two-metre lattice, refuses to rotate, and its
+three-shade pattern was chosen to carry across the seam — so a square reads as one floor.
+You can also **build on your own paving**: pave the square first, then put the fountain in
+the middle of it. One bug fell out of testing: last round's stuck-worker rescue moved
+people up to **thirty metres** — a teleport you could watch — and because it always
+worked, no target was ever written off as unreachable. It is now a nudge of a few metres
+that samples the path (so it walks up a slope but not up a cliff) and gives up after two
+consecutive failures.
+
+**Previous round — the gate, and farmhands who actually farm:** the city gate is now a
 building rather than a plank the height of a fence — two battlemented towers with arrow
 slits, banners and lanterns, a stone fan across the arch, and **two iron-bound leaves**
 that swing from their own hinges. It stands 9.4 metres against a wall's 2.2. It **opens

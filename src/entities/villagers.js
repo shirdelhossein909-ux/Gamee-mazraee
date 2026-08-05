@@ -144,6 +144,9 @@
         if (this._tryStep(v, dx / d, dz / d, step, world)) {
           moving = true;
           v.stuckT = 0;
+          /* walking again, so whatever the nudge freed them from is behind
+             them: the unstick budget counts *consecutive* failures only */
+          v.unstuck = 0;
         } else if (!v.detour && (v.stuckT || 0) + dt > 0.4 &&
           this._detour(v, dx / d, dz / d, world)) {
           /* boxed in against something long — go round it */
@@ -170,6 +173,7 @@
       } else if (v.job !== 'idle' && v.hasTarget && !v.detour) {
         v.working = true;                      // arrived — get to work
         v.stuckT = 0;
+        v.unstuck = 0;
         /* got here in the end, so this target is not a lost cause after all */
         if (v.fails) {
           const id = v.node ? v.node.id : (v.plot ? 'p' + v.plot.gx + ',' + v.plot.gz : null);
@@ -294,22 +298,44 @@
     return false;
   };
 
-  /* The last resort, and the one that can never deadlock: a worker who has
-     been unable to move for a long time is lifted onto the nearest walkable
-     ground in the direction they were trying to go. Nothing else guarantees
-     progress — a villager pinned between a cliff and a wall has no step and
-     no detour, and used to stand there drifting until the job was abandoned.
-     The game already relocates people when you build on top of them; this is
-     the same courtesy. */
+  /* The last resort: a worker who has been unable to move for a long time is
+     nudged onto walkable ground in the direction they were trying to go.
+     Nothing else guarantees progress — a villager pinned between a cliff and
+     a wall has no step and no detour, and used to stand there drifting until
+     the job was abandoned. The game already relocates people when you build
+     on top of them; this is the same courtesy.
+
+     Two limits keep it honest. It is a nudge of a few metres, not a jump —
+     freeing someone by flinging them thirty metres across the valley is not
+     a fix, it is a teleport you can watch happen. And it respects the same
+     climb limit walking does, so nobody is unstuck up the side of a cliff.
+     After a few nudges with nothing to show for it the target really is
+     unreachable, and giving up on it is the right answer. */
+  const UNSTICK_TRIES = 2;
+  const UNSTICK_AHEAD = [3, 5, 7];
+  const UNSTICK_RISE = 1.5;      // metres of climb allowed between samples
   Villagers.prototype._unstick = function (v, dirX, dirZ, world) {
     const g = this.game;
+    if ((v.unstuck || 0) >= UNSTICK_TRIES) return false;
+    /* Somewhere they could plausibly have walked to: dry, unbuilt, and up a
+       slope rather than up a wall. Sampling the line rather than comparing
+       the two endpoints is what lets a quarrier be nudged up a hillside to
+       a vein while still refusing to lift anyone over a cliff. */
     const ok = (x, z) => {
       const h = world.heightAt(x, z);
-      return h > C.WORLD.waterLevel + 0.3 && !(g.building && g.building.blocks(x, z, true));
+      if (h <= C.WORLD.waterLevel + 0.3) return false;
+      if (g.building && g.building.blocks(x, z, true)) return false;
+      let ph = v.y;
+      for (let i = 1; i <= 4; i++) {
+        const sh = world.heightAt(v.x + (x - v.x) * i / 4, v.z + (z - v.z) * i / 4);
+        if (Math.abs(sh - ph) > UNSTICK_RISE) return false;
+        ph = sh;
+      }
+      return true;
     };
-    for (const ahead of [6, 12, 20, 30]) {
+    for (const ahead of UNSTICK_AHEAD) {
       const cx = v.x + dirX * ahead, cz = v.z + dirZ * ahead;
-      for (let r = 0; r <= 6; r += 1.5) {
+      for (let r = 0; r <= 3.6; r += 1.2) {
         const n = r < 0.1 ? 1 : 10;
         for (let a = 0; a < n; a++) {
           const ang = (a / n) * 6.283;
@@ -317,6 +343,7 @@
           if (!ok(x, z)) continue;
           v.x = x; v.z = z; v.y = world.heightAt(x, z);
           v.detour = null; v.stuckT = 0;
+          v.unstuck = (v.unstuck || 0) + 1;
           return true;
         }
       }
@@ -417,6 +444,7 @@
     const g = this.game;
     v.working = false;
     v.hasTarget = false;
+    v.unstuck = 0;                    // a new target deserves a fresh budget
     const home = this.center();
 
     switch (v.job) {

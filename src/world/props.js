@@ -330,6 +330,37 @@
     return mesh;
   };
 
+  /* Wildflowers for a hillside you planted — stem, leaves and a ring of
+     petals round a heart, merged the same way the grass is. */
+  const PETALS = [0xe8556d, 0xf0a03c, 0xf4e05a, 0xd86ac8, 0xe8e8f0, 0x7a9ee8];
+  M.flowerField = function (points) {
+    const parts = [];
+    for (const p of points) {
+      const col = PETALS[(p.r2 * PETALS.length) | 0] || PETALS[0];
+      const tall = 0.34 + p.r1 * 0.32;
+      parts.push({ g: P.cyl4, c: 0x4f8a3e, p: [p.x, p.y + tall * 0.5, p.z], s: [0.045, tall, 0.045] });
+      parts.push({
+        g: P.cone5, c: 0x5f9a4a, p: [p.x + Math.cos(p.r0) * 0.09, p.y + tall * 0.42, p.z + Math.sin(p.r0) * 0.09],
+        r: [0.5, p.r0, 0], s: [0.05, 0.18, 0.05]
+      });
+      /* Four petals and a boxy heart rather than five and a sphere: a hillside
+         carries hundreds of these, and the sphere alone cost more vertices
+         than the whole rest of the flower. */
+      for (let i = 0; i < 4; i++) {
+        const a = p.r0 + i * 1.571;
+        parts.push({
+          g: P.box, c: col, p: [p.x + Math.cos(a) * 0.09, p.y + tall, p.z + Math.sin(a) * 0.09],
+          r: [0, -a, 0.4], s: [0.14, 0.035, 0.08]
+        });
+      }
+      parts.push({ g: P.cyl4, c: 0xf6d24a, p: [p.x, p.y + tall + 0.02, p.z], s: [0.08, 0.05, 0.08] });
+    }
+    if (!parts.length) return null;
+    const mesh = new THREE.Mesh(merge(parts), MAT.solid);
+    mesh.receiveShadow = true;
+    return mesh;
+  };
+
   /* =========================================================
      CROPS — 4 growth stages
      ========================================================= */
@@ -1998,14 +2029,59 @@
     return assemble(p);
   };
 
+  /* Paving has to tile. Each piece fills its two-metre square edge to edge,
+     over a solid bed so no ground shows through the mortar lines, and the
+     three-shade pattern is chosen so it carries across the seam: a piece is
+     exactly three tiles wide, and (ix+iz) mod 3 is unchanged by stepping
+     three tiles, so a whole square reads as one floor rather than a grid of
+     stamps. Placement snaps to the same two-metre lattice and refuses to
+     rotate, which is the other half of keeping it seamless. */
   BM.paving = function (l) {
     const p = [];
     const shades = l >= 3 ? [COL.marble, 0xc8c4b8, TILE_LIGHT] : l >= 2 ? [0xa8a49a, 0x98948a, 0xb8b4aa] : [COL.stone, COL.stoneDark, 0x9a968c];
+    const bed = l >= 3 ? 0x8e8a80 : l >= 2 ? 0x7e7a72 : COL.stoneDark;
+    const S = 2 / 3;                                  // one tile of the three
+    p.push({ g: P.box, c: bed, p: [0, 0.05, 0], s: [2, 0.1, 2] });
     for (let ix = 0; ix < 3; ix++) for (let iz = 0; iz < 3; iz++) {
       p.push({
-        g: P.box, c: shades[(ix + iz * 2) % shades.length],
-        p: [-0.63 + ix * 0.63, 0.06, -0.63 + iz * 0.63], s: [0.58, 0.12, 0.58]
+        g: P.box, c: shades[(ix + iz) % 3],
+        p: [(ix - 1) * S, 0.13, (iz - 1) * S], s: [S - 0.05, 0.06, S - 0.05]
       });
+    }
+    return assemble(p, true);
+  };
+
+  /* =========================================================
+     LAND TOOLS — ghosts only. Nothing here is ever placed in the
+     world: they are previews for shaping the ground itself.
+     ========================================================= */
+  BM.levelpad = function (l, def) {
+    const w = (def && def.size[0]) || 10, d = (def && def.size[1]) || w;
+    const p = [];
+    p.push({ g: P.box, c: 0x8fd8b0, p: [0, 0.06, 0], s: [w, 0.12, d] });
+    // a grid drawn on top, so you can read the size at a glance
+    const step = Math.max(2, Math.round(w / 8) * 2);
+    for (let i = -w / 2; i <= w / 2 + 0.01; i += step) {
+      p.push({ g: P.box, c: 0xd8f4e4, p: [i, 0.16, 0], s: [0.16, 0.08, d] });
+      p.push({ g: P.box, c: 0xd8f4e4, p: [0, 0.16, i], s: [w, 0.08, 0.16] });
+    }
+    for (let s = -1; s <= 1; s += 2) {
+      p.push({ g: P.box, c: 0x4fae86, p: [s * w / 2, 0.3, 0], s: [0.3, 0.6, d] });
+      p.push({ g: P.box, c: 0x4fae86, p: [0, 0.3, s * d / 2], s: [w, 0.6, 0.3] });
+    }
+    return assemble(p, true);
+  };
+
+  BM.hillghost = function (l, def) {
+    const t = (def && def.terrain) || {};
+    const r = t.r || 10, peak = t.peak || 6;
+    const p = [];
+    const rings = 7;
+    for (let i = 0; i < rings; i++) {
+      const w = 1 - i / rings;                     // outer ring first
+      const rr = r * w;
+      const y = peak * Math.pow(1 - w * w, 0.9);
+      p.push({ g: P.cyl, c: t.tint || 0xd9c07e, p: [0, y * 0.5, 0], s: [rr * 2, Math.max(0.3, y), rr * 2] });
     }
     return assemble(p, true);
   };

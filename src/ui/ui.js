@@ -108,6 +108,7 @@
     $('set-view').oninput = function () { self.game.setViewRadius(+this.value); ST.set('view', +this.value); };
     $('set-sens').oninput = function () { G.Input.sensitivity = +this.value; ST.set('sens', +this.value); };
     $('set-shadow').onchange = function () { self.game.setShadows(this.checked); ST.set('shadow', this.checked); };
+    if ($('set-autolevel')) $('set-autolevel').onchange = function () { ST.set('autoLevel', this.checked); };
 
     // audio
     const vol = function (id, bus) {

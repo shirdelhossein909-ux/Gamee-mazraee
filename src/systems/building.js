@@ -422,6 +422,13 @@
     this.placing.rot = (this.placing.rot + Math.PI / 2) % (Math.PI * 2);
   };
 
+  /* Walls follow the land — a rampart cut level through a hillside looks
+     wrong and would carve a trench through it. Jetties need their shoreline.
+     Everything else stands on ground made flat for it. */
+  Building.prototype.willLevel = function (def) {
+    return !def.terrain && !def.connects && !def.water && !!G.Settings.get('autoLevel');
+  };
+
   Building.prototype.canUnlock = function (defId) {
     const def = C.BUILDINGS[defId], prog = this.game.progress;
     if (prog.tier < def.tier) return { ok: false, why: 'به سطح آبادی «' + C.TIERS[def.tier].name + '» نیاز داری' };
@@ -432,6 +439,15 @@
   /** validate a candidate spot; returns {ok, why} */
   Building.prototype.validate = function (defId, x, z, rot, level, free) {
     const def = C.BUILDINGS[defId];
+    /* A land tool is not a building — it has its own rules about where it
+       can be used, and nothing is ever placed. */
+    if (def.terrain) {
+      const chk = this.game.terraform.check(def, x, z);
+      if (!chk.ok) return chk;
+      const tcost = def.cost(1);
+      if (!this.game.inv.canAfford(tcost)) return { ok: false, why: 'منابع کافی نداری', cost: tcost, y: chk.y };
+      return { ok: true, y: chk.y, cost: tcost };
+    }
     const fp = footprint(def, rot);
     const world = this.game.world;
 
@@ -446,7 +462,10 @@
     }
     if (needWater && !waterNear) return { ok: false, why: 'باید کنار آب ساخته شود' };
     if (f.min < C.WORLD.waterLevel + 0.25 && !needWater) return { ok: false, why: 'زمین زیر آب است' };
-    if (f.flat > 1.1 + fp.w * 0.14) return { ok: false, why: 'زمین ناهموار است' };
+    /* Ground that is going to be levelled anyway may be twice as rough — a
+       cliff still refuses, but a lumpy meadow is no longer an argument. */
+    const tol = (1.1 + fp.w * 0.14) * (this.willLevel(def) ? 2.2 : 1);
+    if (f.flat > Math.min(tol, 7)) return { ok: false, why: 'زمین ناهموار است' };
 
     // overlap with other buildings
     const half = Math.max(fp.w, fp.d) / 2 + CELL;
@@ -455,6 +474,11 @@
         const arr = this.grid.get(U.key(cx, cz));
         if (!arr) continue;
         for (const b of arr) {
+          /* You pave a square and *then* put a fountain in the middle of it.
+             Paving, flower beds and channels lie flat on the ground, so
+             anything upright may stand on them — they just do not stack on
+             each other, or the lattice would stop being a lattice. */
+          if (b.def.walkOver && !def.walkOver) continue;
           if (Math.abs(b.x - x) < (b.w + fp.w) / 2 - 0.15 && Math.abs(b.z - z) < (b.d + fp.d) / 2 - 0.15) {
             return { ok: false, why: 'روی ساختمان دیگری است' };
           }
@@ -494,6 +518,16 @@
     x = Math.round(x / GS) * GS;
     z = Math.round(z / GS) * GS;
 
+    /* Paving is meant to become a floor, not a collection of slabs, so it
+       snaps to its own lattice — one full piece width — and never turns.
+       Rotating a tiling pattern is exactly how a square stops matching. */
+    if (p.def.tile) {
+      const S = p.def.size[0];
+      x = Math.round(x / S) * S;
+      z = Math.round(z / S) * S;
+      p.rot = 0;
+    }
+
     // preview the shape it will take once it links to its neighbours
     if (p.def.connects) {
       const mask = this.wallMaskAt(x, z, null);
@@ -523,12 +557,17 @@
   Building.prototype.confirm = function () {
     const p = this.placing;
     if (!p) return false;
+    if (p.def.terrain) return this._confirmLand(p);
     if (p.moving) {
       const chk = this.validate(p.defId, p.x, p.z, p.rot, p.level, true);
       if (!chk.ok) { this.game.ui.toast('⚠️ ' + chk.why, 'bad'); this.game.audio.deny(); return false; }
       const saved = p.moving;
       p.moving = null;                 // cancel() must not put it back as well
       this.cancel();
+      if (this.willLevel(saved.def)) {
+        const fp = footprint(saved.def, p.rot);
+        this.game.terraform.autoLevel(saved.def, p.x, p.z, fp.w, fp.d);
+      }
       const b = this._restore(saved, p.x, p.z, p.rot);
       this.game.audio.build();
       this.game.ui.toast('✅ ' + saved.def.icon + ' ' + saved.def.name + ' جابه‌جا شد', 'good');
@@ -539,6 +578,12 @@
     if (!res.ok) { this.game.ui.toast('⚠️ ' + res.why, 'bad'); return false; }
     if (!this.game.inv.pay(res.cost)) return false;
 
+    /* Flatten the ground first, so the building seats itself on the level it
+       just made rather than on the bumps it was standing over. */
+    if (this.willLevel(p.def)) {
+      const fp = footprint(p.def, p.rot);
+      this.game.terraform.autoLevel(p.def, p.x, p.z, fp.w, fp.d);
+    }
     const b = this.place(p.defId, p.x, p.z, p.rot, 1);
     this.game.progress.addSkill('building', 6 + p.def.size[0] * 2);
     this.game.progress.addXp(12);
@@ -550,6 +595,29 @@
 
     // keep placing the same kind while resources last (fences, walls…)
     const keep = this.validate(p.defId, p.x, p.z, p.rot, 1);
+    if (!keep.ok && keep.why === 'منابع کافی نداری') this.cancel();
+    return true;
+  };
+
+  /* Land tools go through the same ghost, the same grid snap and the same
+     purse as a building — they just move earth instead of leaving something
+     behind. Like walls, the tool stays in your hand so you can flatten a
+     whole quarter or raise a range of hills without reopening the menu. */
+  Building.prototype._confirmLand = function (p) {
+    const g = this.game;
+    const res = this.validate(p.defId, p.x, p.z, 0, 1);
+    if (!res.ok) { g.ui.toast('⚠️ ' + res.why, 'bad'); g.audio.deny(); return false; }
+    // move the earth first: nothing is charged for work that did not happen
+    const msg = g.terraform.apply(p.def, p.x, p.z);
+    if (!msg) { g.ui.toast('⚠️ اینجا چیزی برای تغییر نیست', 'bad'); return false; }
+    g.inv.pay(res.cost);
+    g.progress.addSkill('building', 4);
+    g.progress.addXp(6);
+    g.progress.stat('terraform', 1);
+    g.audio.build();
+    g.ui.toast(msg, 'good');
+    g.fx.hitBurst(p.x, g.world.heightAt(p.x, p.z) + 0.6, p.z, 0xa8d8b0, 20);
+    const keep = this.validate(p.defId, p.x, p.z, 0, 1);
     if (!keep.ok && keep.why === 'منابع کافی نداری') this.cancel();
     return true;
   };

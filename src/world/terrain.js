@@ -31,6 +31,12 @@
     this.pending = [];
     this.unpopulated = [];         // ground down, props still owed
     this._starved = 0;
+    /* ground the player has re-shaped: levelled squares and raised hills.
+       See the LAND EDITS block below — the list is empty on a fresh world,
+       and heightAt() pays nothing at all while it stays that way. */
+    this.edits = [];
+    this.editGrid = new Map();
+    this.editSeq = 0;
     this.nodes = new Map();      // nodeId -> node
     this.harvested = Object.create(null); // nodeId -> in-game day it returns
     this.viewRadius = W.viewRadius;
@@ -67,7 +73,190 @@
       const b = 1 - U.smoothstep(W.baseRadius * 0.55, W.baseRadius * 1.55, d);
       h = U.lerp(h, W.baseHeight, b);
     }
+    // and last of all, whatever the player has levelled or raised
+    return this.edits.length ? this._shape(x, z, h) : h;
+  };
+
+  /* ===================== LAND EDITS =====================
+     Everything above is a pure function of the seed. This is the one place
+     the world remembers what you did to it: squares you levelled flat and
+     hills you raised. An edit is a shape with a core and a soft rim —
+
+       weight = 1 inside the core, smoothstepping to 0 across `edge`
+
+     — so a levelled plaza is dead flat in the middle and melts into the
+     natural ground at its border instead of ending in a cliff.
+
+     They are indexed into coarse cells because heightAt() is the hottest
+     function in the game: a chunk alone asks it a thousand times. A lookup
+     touches only the handful of edits that can possibly reach the point. */
+  const ECELL = 24;
+
+  function editWeight(e, x, z) {
+    const dx = Math.abs(x - e.x), dz = Math.abs(z - e.z);
+    let od;                                    // metres outside the core
+    if (e.round) od = Math.sqrt(dx * dx + dz * dz) - e.rx;
+    else od = Math.max(dx - e.rx, dz - e.rz);
+    if (od <= 0) return 1;
+    if (od >= e.edge) return 0;
+    const t = od / e.edge;
+    return 1 - t * t * (3 - 2 * t);
+  }
+  World.editWeight = editWeight;
+
+  /* Silhouettes. `pow` bends the dome: 1 is a plain hill, below 1 spreads it
+     into a broad swell, above 1 draws it up into a peak. `rough` breaks the
+     surface with ridged noise so a rock face never looks turned on a lathe. */
+  const HILL = {
+    sand: { pow: 1.00, rough: 0.05, freq: 0.055, biome: 'desert' },
+    flower: { pow: 0.85, rough: 0.04, freq: 0.070, biome: 'meadow' },
+    rock: { pow: 1.25, rough: 0.30, freq: 0.045, biome: 'rocky' },
+    snow: { pow: 1.10, rough: 0.13, freq: 0.050, biome: 'snow' },
+    peak: { pow: 1.80, rough: 0.45, freq: 0.035, biome: 'rocky', cap: 'snow', capAt: 0.62 }
+  };
+  World.HILL = HILL;
+
+  World.prototype._editsAt = function (x, z) {
+    return this.editGrid.get(U.key(Math.floor(x / ECELL), Math.floor(z / ECELL)));
+  };
+
+  World.prototype._shape = function (x, z, h) {
+    const list = this._editsAt(x, z);
+    if (!list) return h;
+    for (let i = 0; i < list.length; i++) {
+      const e = list[i];
+      const w = editWeight(e, x, z);
+      if (w <= 0) continue;
+      if (e.kind === 'flat') h += (e.y - h) * w;
+      else h += this._lift(e, x, z, w);
+    }
     return h;
+  };
+
+  World.prototype._lift = function (e, x, z, w) {
+    const p = HILL[e.hk] || HILL.sand;
+    let lift = e.peak * Math.pow(w, p.pow);
+    if (p.rough) {
+      const r = this.nz.mount.ridged(x * p.freq, z * p.freq, 3);
+      lift += (r - 0.42) * p.rough * e.peak * w * w;
+    }
+    return lift;
+  };
+
+  /** the hill standing at this point, if any — the last one wins */
+  World.prototype.hillAt = function (x, z, minW) {
+    if (!this.edits.length) return null;
+    const list = this._editsAt(x, z);
+    if (!list) return null;
+    let out = null;
+    for (let i = 0; i < list.length; i++) {
+      const e = list[i];
+      if (e.kind !== 'hill') continue;
+      if (editWeight(e, x, z) > (minW === undefined ? 0.22 : minW)) out = e;
+    }
+    return out;
+  };
+
+  /** is this point inside ground the player levelled? */
+  World.prototype.levelled = function (x, z, minW) {
+    if (!this.edits.length) return false;
+    const list = this._editsAt(x, z);
+    if (!list) return false;
+    for (let i = 0; i < list.length; i++) {
+      const e = list[i];
+      if (e.kind === 'flat' && editWeight(e, x, z) > (minW === undefined ? 0.55 : minW)) return true;
+    }
+    return false;
+  };
+
+  /** the edit whose core covers this point — what a restore tool undoes */
+  World.prototype.editAt = function (x, z) {
+    if (!this.edits.length) return null;
+    const list = this._editsAt(x, z);
+    if (!list) return null;
+    let out = null;
+    for (let i = 0; i < list.length; i++) if (editWeight(list[i], x, z) > 0.5) out = list[i];
+    return out;
+  };
+
+  World.prototype._indexEdit = function (e, add) {
+    const r = Math.max(e.rx, e.rz) + e.edge;
+    for (let cx = Math.floor((e.x - r) / ECELL); cx <= Math.floor((e.x + r) / ECELL); cx++) {
+      for (let cz = Math.floor((e.z - r) / ECELL); cz <= Math.floor((e.z + r) / ECELL); cz++) {
+        const k = U.key(cx, cz);
+        let arr = this.editGrid.get(k);
+        if (add) {
+          if (!arr) this.editGrid.set(k, arr = []);
+          arr.push(e);
+        } else if (arr) {
+          const i = arr.indexOf(e);
+          if (i >= 0) arr.splice(i, 1);       // order matters: not swapRemove
+          if (!arr.length) this.editGrid.delete(k);
+        }
+      }
+    }
+  };
+
+  /** record a new piece of shaped ground. Does not rebuild — see rebuildArea */
+  World.prototype.addEdit = function (e) {
+    e.id = ++this.editSeq;
+    if (e.edge === undefined) e.edge = 2.5;
+    if (e.rz === undefined) e.rz = e.rx;
+    this.edits.push(e);
+    this._indexEdit(e, true);
+    return e;
+  };
+
+  World.prototype.removeEdit = function (e) {
+    const i = this.edits.indexOf(e);
+    if (i < 0) return false;
+    this.edits.splice(i, 1);
+    this._indexEdit(e, false);
+    return true;
+  };
+
+  /** the ground you shaped, small enough to sit in a save file */
+  World.prototype.serializeEdits = function () {
+    return this.edits.map(function (e) {
+      return {
+        k: e.kind === 'hill' ? 1 : 0, x: e.x, z: e.z, rx: e.rx, rz: e.rz,
+        e: e.edge, y: e.y, o: e.round ? 1 : 0, p: e.peak, hk: e.hk, a: e.auto ? 1 : 0
+      };
+    });
+  };
+
+  World.prototype.loadEdits = function (rows) {
+    this.edits.length = 0;
+    this.editGrid.clear();
+    this.editSeq = 0;
+    if (!Array.isArray(rows)) return;
+    for (const r of rows) {
+      this.addEdit({
+        kind: r.k ? 'hill' : 'flat', x: r.x, z: r.z, rx: r.rx, rz: r.rz,
+        edge: r.e, y: r.y, round: !!r.o, peak: r.p, hk: r.hk, auto: !!r.a
+      });
+    }
+  };
+
+  /* Throw away every loaded chunk that the shaped ground touches and build
+     it again. A deliberate act by the player is worth one visible hitch —
+     streaming it in over the next second would show holes in the world. */
+  World.prototype.rebuildArea = function (x, z, radius) {
+    const half = W.chunkSize * 0.5, keys = [];
+    this.chunks.forEach(function (ch, k) {
+      if (Math.abs(ch.cx * W.chunkSize - x) <= radius + half &&
+        Math.abs(ch.cz * W.chunkSize - z) <= radius + half) keys.push(k);
+    });
+    for (const k of keys) {
+      const ch = this.chunks.get(k);
+      const cx = ch.cx, cz = ch.cz;
+      this._disposeChunk(k);
+      const nc = this._buildChunk(cx, cz);
+      this._populateChunk(nc, 0);
+      const q = this.unpopulated.indexOf(nc);
+      if (q >= 0) this.unpopulated.splice(q, 1);
+    }
+    return keys.length;
   };
 
   /** how much the homestead bias lifts the terrain at distance d from origin */
@@ -101,6 +290,16 @@
   World.prototype.biomeAt = function (x, z, h) {
     if (h === undefined) h = this.heightAt(x, z);
     if (h < W.waterLevel - 0.1) return 'ocean';
+    /* a hill you raised wears its own skin — sand, rock, snow or flowers —
+       out to the point where its rim melts back into the countryside */
+    if (this.edits.length) {
+      const hill = this.hillAt(x, z);
+      if (hill) {
+        const p = HILL[hill.hk] || HILL.sand;
+        if (p.cap && editWeight(hill, x, z) > p.capAt) return p.cap;
+        return p.biome;
+      }
+    }
     if (h < W.waterLevel + 1.0) return 'beach';
     const d = Math.sqrt(x * x + z * z);
     if (d < W.baseRadius * 1.14) return 'plains';
@@ -312,6 +511,8 @@
       if (h < W.waterLevel + 0.45) continue;
       const dHome = Math.sqrt(x * x + z * z);
       if (dHome < 13) continue;                       // keep the spawn clearing open
+      // ground you levelled is prepared ground: nothing grows back on it
+      if (this.levelled(x, z)) continue;
       const slope = this.slopeAt(x, z);
       if (slope > 2.6) continue;
       const bId = this.biomeAt(x, z, h);
@@ -340,9 +541,37 @@
       const gm = M.grassField(tufts);
       if (gm) { gm.matrixAutoUpdate = false; gm.updateMatrix(); chunk.group.add(gm); chunk.grass = gm; }
     }
+    if (this.edits.length) this._hillFlora(chunk, ox, oz, size);
     if (chunk.cx === 0 && chunk.cz === 0) this._starterProps(chunk, day);
     chunk.popState = null;
     return true;
+  };
+
+  /* A flower hill has to actually be full of flowers, and the thin scatter
+     that dresses ordinary countryside is nowhere near enough. Any flowered
+     hill overlapping this chunk gets its own dense pass, merged into a
+     single mesh so the whole hillside costs one draw call. */
+  const FLOWERS_PER_CHUNK = 460;
+  World.prototype._hillFlora = function (chunk, ox, oz, size) {
+    let any = false;
+    for (const e of this.edits) {
+      if (e.kind !== 'hill' || e.hk !== 'flower') continue;
+      const r = Math.max(e.rx, e.rz) + e.edge + size * 0.5;
+      if (Math.abs(e.x - ox) > r || Math.abs(e.z - oz) > r) continue;
+      any = true; break;
+    }
+    if (!any) return;
+    const rnd = U.rng(U.strSeed('fl' + chunk.cx + '_' + chunk.cz + '_' + this.seed));
+    const pts = [];
+    for (let i = 0; i < FLOWERS_PER_CHUNK; i++) {
+      const x = ox + (rnd() - 0.5) * size, z = oz + (rnd() - 0.5) * size;
+      const hill = this.hillAt(x, z, 0.16);
+      if (!hill || hill.hk !== 'flower') continue;
+      if (this.levelled(x, z)) continue;
+      pts.push({ x: x, y: this.heightAt(x, z), z: z, r0: rnd() * 6.28, r1: rnd(), r2: rnd() });
+    }
+    const fm = M.flowerField(pts);
+    if (fm) { fm.matrixAutoUpdate = false; fm.updateMatrix(); chunk.group.add(fm); chunk.flowers = fm; }
   };
 
   /* The very first chunk always carries a guaranteed starter kit of trees,
@@ -389,9 +618,10 @@
     const back = this.harvested[id];
     if (back !== undefined && back > day) return;     // still regrowing
     if (back !== undefined) delete this.harvested[id];
-    // never regrow inside a structure or on a tilled plot
+    // never regrow inside a structure, on a tilled plot or on levelled ground
     if (this.game.building && this.game.building.occupied(x, z, 0.9)) return;
     if (this.game.farming && this.game.farming.plotAt(x, z)) return;
+    if (this.levelled(x, z)) return;
 
     const def = kind === 'tree' ? C.TREES[type] : kind === 'ore' ? C.ORES[type] : C.BUSHES[type];
     let obj;

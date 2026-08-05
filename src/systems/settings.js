@@ -17,6 +17,7 @@
     sens: 1.2,
     shadow: true,
     sound: true,
+    autoLevel: true,
     vol: { master: 0.8, music: 0.5, ambient: 0.6, sfx: 0.85 }
   };
 
@@ -32,7 +33,7 @@
     load: function () {
       const out = {
         quality: DEFAULTS.quality, view: DEFAULTS.view, sens: DEFAULTS.sens,
-        shadow: DEFAULTS.shadow, sound: DEFAULTS.sound,
+        shadow: DEFAULTS.shadow, sound: DEFAULTS.sound, autoLevel: DEFAULTS.autoLevel,
         vol: {
           master: DEFAULTS.vol.master, music: DEFAULTS.vol.music,
           ambient: DEFAULTS.vol.ambient, sfx: DEFAULTS.vol.sfx
@@ -48,6 +49,7 @@
           out.sens = clamp(d.sens, 0.5, 3, DEFAULTS.sens);
           if (typeof d.shadow === 'boolean') out.shadow = d.shadow;
           if (typeof d.sound === 'boolean') out.sound = d.sound;
+          if (typeof d.autoLevel === 'boolean') out.autoLevel = d.autoLevel;
           if (d.vol) for (const k in out.vol) {
             if (d.vol[k] !== undefined) out.vol[k] = clamp(d.vol[k], 0, 1, out.vol[k]);
           }
@@ -57,7 +59,11 @@
       return out;
     },
 
-    get: function () { return this.current || this.load(); },
+    /** the whole settings object, or one value from it when given a key */
+    get: function (key) {
+      const s = this.current || this.load();
+      return key === undefined ? s : s[key];
+    },
 
     /** merge a change in and write it straight back out */
     set: function (key, value) {
@@ -110,6 +116,7 @@
       set('set-view', 'value', s.view);
       set('set-sens', 'value', s.sens);
       set('set-shadow', 'checked', s.shadow);
+      set('set-autolevel', 'checked', s.autoLevel);
       set('set-sound', 'checked', s.sound);
       set('set-vol-master', 'value', s.vol.master);
       set('set-vol-music', 'value', s.vol.music);

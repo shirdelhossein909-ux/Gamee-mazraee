@@ -51,6 +51,7 @@
         chronicle: game.chronicle.serialize(),
         disasters: game.disasters.serialize(),
         markers: game.markers,
+        land: game.world.serializeEdits(),
         harvested: game.world.harvested,
         economy: { mult: game.economy.mult }
       };
@@ -73,6 +74,15 @@
     /** apply a save onto an already-built game world (same seed) */
     apply: function (game, d) {
       if (!d) return false;
+      /* Normally the shaped ground is already in the height field by now —
+         _buildWorld puts it there before the first chunk exists. Loading
+         into a live world (the load button) has no such luxury, so put it
+         back and rebuild what is on screen. */
+      if (d.land && !game.world.edits.length && d.land.length) {
+        game.world.loadEdits(d.land);
+        game.world.rebuildArea(game.player ? game.player.pos.x : 0,
+          game.player ? game.player.pos.z : 0, 1e6);
+      }
       if (d.time) {
         game.time.hours = d.time.hours;
         game.time.day = d.time.day;

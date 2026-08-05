@@ -72,7 +72,9 @@
     savanna: { name: 'علفزار', c1: 0x9aad55, c2: 0xa8b962, tree: 0.14, rock: 0.07 },
     rocky: { name: 'کوهستان', c1: 0x8b8b86, c2: 0x9b9b95, tree: 0.06, rock: 0.42 },
     snow: { name: 'برف‌گیر', c1: 0xe9f0f4, c2: 0xdbe6ec, tree: 0.10, rock: 0.16 },
-    swamp: { name: 'مرداب', c1: 0x51663f, c2: 0x5c7348, tree: 0.30, rock: 0.04 }
+    swamp: { name: 'مرداب', c1: 0x51663f, c2: 0x5c7348, tree: 0.30, rock: 0.04 },
+    /* only ever appears on a hill you raised yourself */
+    meadow: { name: 'گلزار', c1: 0x74b356, c2: 0x88c665, tree: 0.03, rock: 0.01 }
   };
 
   /* ===================== ITEMS ===================== */
@@ -574,7 +576,10 @@
   dec('signpost', 'تیرک راهنما', '🪧', 'signpost', [1, 1], 25, { wood: 5 }, 1,
     { desc: 'تیرکی با چند تختهٔ جهت‌نما.' });
   dec('paving', 'سنگفرش', '⬜', 'paving', [2, 2], 20, { stone: 6 }, 1,
-    { desc: 'یک قطعه سنگفرش. پشت‌سرهم بگذار تا میدان و خیابان بسازی.', walkOver: true });
+    {
+      desc: 'یک قطعه سنگفرش. روی شبکهٔ خودش می‌نشیند و نمی‌چرخد، پس هر چند تا که بگذاری یک کف یکدست می‌شود — بدون درز و بدون پستی و بلندی.',
+      walkOver: true, tile: true
+    });
   dec('sundial', 'ساعت آفتابی', '🕰️', 'sundial', [2, 2], 170, { stone: 16, iron: 2 }, 3,
     { desc: 'سایهٔ میله روی حلقهٔ سنگی ساعت را می‌گوید.', sk: 1 });
   dec('peacock', 'طاووس سنگی', '🦚', 'peacock', [2, 2], 210, { stone: 18, tile: 6 }, 4,
@@ -590,12 +595,79 @@
   dec('bellarch', 'زنگولهٔ کاروان', '🔔', 'bellarch', [2, 2], 130, { bell: 1, wood: 8 }, 3,
     { desc: 'زنگولهٔ برنجی زیر طاقی چوبی. باد که بیاید صدا می‌دهد.' });
 
+  /* ===================== SHAPING THE LAND =====================
+     These are not buildings. Nothing is ever placed: choosing one and
+     clicking re-shapes the ground itself, and the change is permanent and
+     saved. `terrain.op` says which way:
+
+       flat — level a block dead flat, blending out at its rim
+       hill — raise a hill of a given kind and size
+       undo — put a piece of shaped ground back the way it was
+
+     Levelling is priced in labour, not stone: moving earth costs your
+     people's time, so the bill is coins with a little timber for the
+     shoring. Raising a hill wants the material to raise it with. */
+  const land = (id, name, icon, size, terrain, price, mats, desc, sk) => bld({
+    id: id, name: name, icon: icon, cat: 'land',
+    model: terrain.op === 'hill' ? 'hillghost' : 'levelpad',
+    size: size, max: 1, tier: 0, sk: sk || 0, terrain: terrain, desc: desc,
+    cost: () => Object.assign({}, mats, { coin: price })
+  });
+
+  land('level_s', 'تخت‌کردن زمین (کوچک)', '🟩', [10, 10],
+    { op: 'flat', edge: 3 }, 18, { wood: 3 },
+    'یک قطعهٔ ۱۰×۱۰ را کاملاً تخت می‌کند و لبه‌هایش را نرم به زمین اطراف می‌رساند. اگر کنارِ زمین تخت‌شدهٔ دیگری باشد، هم‌ترازِ همان می‌شود تا شهرت یک سطح یکدست شود.');
+  land('level_l', 'تخت‌کردن زمین (بزرگ)', '🟢', [28, 28],
+    { op: 'flat', edge: 5 }, 90, { wood: 12, stone: 6 },
+    'یک قطعهٔ ۲۸×۲۸ را یک‌جا تخت می‌کند — اندازهٔ یک میدان. برای صاف کردن کل زمینِ شهر، همین را پشت‌سرهم بگذار.', 1);
+  land('level_undo', 'بازگرداندن زمین', '↩️', [8, 8],
+    { op: 'undo' }, 8, {},
+    'زمینی که تخت کرده‌ای یا تپه‌ای که ساخته‌ای را به شکل طبیعی خودش برمی‌گرداند. نشانه بگیر و کلیک کن.');
+
+  /* size, height and looks of every hill you can buy */
+  const HILLS = [
+    ['sand', 'شنی', '🏜️', 'تپهٔ ماسه‌ای نرم و بی‌درخت، رنگ کویر.', 0xd9c07e],
+    ['rock', 'سنگی', '🪨', 'تپهٔ سنگی ناهموار با تخته‌سنگ و رگه‌های معدن.', 0x8b8b86],
+    ['snow', 'برفی', '🏔️', 'تپهٔ سفیدپوش با کاج‌های سوزنی.', 0xe9f0f4],
+    ['flower', 'پرگل', '🌼', 'تپه‌ای که سرتاسرش گل وحشی است — رنگ‌به‌رنگ، هزارتا.', 0x88c665],
+    ['peak', 'کوه', '⛰️', 'کوه بلند و تیز با تاج برفی. از آن سر دشت پیداست.', 0x9b9b95]
+  ];
+  const HILL_SIZE = [
+    { key: 's', tag: 'کوچک', r: 9, peak: 5.5, edgeF: 0.94, price: 110, mats: { stone: 12, clay: 8 }, sk: 1 },
+    { key: 'l', tag: 'بزرگ', r: 24, peak: 17, edgeF: 0.96, price: 520, mats: { stone: 60, clay: 30, wood: 20 }, sk: 3 }
+  ];
+  for (const h of HILLS) {
+    for (const s of HILL_SIZE) {
+      const peak = h[0] === 'peak' ? s.peak * 1.9 : h[0] === 'flower' ? s.peak * 0.7 : s.peak;
+      land('hill_' + h[0] + '_' + s.key,
+        'تپهٔ ' + h[1] + ' (' + s.tag + ')', h[2],
+        [s.r * 2, s.r * 2],
+        { op: 'hill', kind: h[0], r: s.r, peak: peak, edgeF: s.edgeF, tint: h[4] },
+        Math.round(s.price * (h[0] === 'peak' ? 1.6 : 1)),
+        s.mats, h[3] + ' بلندی حدود ' + Math.round(peak) + ' متر، پهنا ' + (s.r * 2) + ' متر.',
+        s.sk + (h[0] === 'peak' ? 1 : 0));
+    }
+  }
+
+  /* How the ground reshapes itself under what you build. */
+  C.LEVEL = {
+    margin: 0.7,        // metres of level ground round a footprint
+    edge: 2.4,          // the least the level blends back into the hillside
+    edgePerMetre: 1.6,  // …widened by this much per metre of earth moved
+    edgeMax: 16,        // and never wider than this
+    skipFlat: 0.12,     // ground already this even is left alone
+    datumReach: 12,     // adopt a neighbouring platform's height from this far
+    datumStep: 4.5,     // …but not if it would mean a step this big
+    minY: 0.6           // levelled ground always stays this far above water
+  };
+
   C.BUILD_CATS = [
     { id: 'farm', name: '🌾 مزرعه' },
     { id: 'home', name: '🏠 مسکونی' },
     { id: 'prod', name: '🏭 تولیدی' },
     { id: 'city', name: '🏛️ شهری' },
     { id: 'decor', name: '✨ تزئینات' },
+    { id: 'land', name: '⛰️ زمین' },
     { id: 'def', name: '🛡️ دفاعی' },
     { id: 'crew', name: '👷 کارگرها' }
   ];

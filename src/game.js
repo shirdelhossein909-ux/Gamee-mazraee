@@ -146,7 +146,7 @@
 
     const steps = [
       ['ساخت صحنه…', function () { self._buildScene(); }],
-      ['شکل‌دهی زمین و کوه‌ها…', function () { self._buildWorld(); }],
+      ['شکل‌دهی زمین و کوه‌ها…', function () { self._buildWorld(saveData); }],
       ['کاشتن جنگل‌ها و معادن…', function () { self.world.generateAll(); }],
       ['آسمان، خورشید و ابرها…', function () { self._buildSky(); }],
       ['آماده‌سازی شخصیت و سامانه‌ها…', function () { self._buildSystems(); }],
@@ -183,8 +183,12 @@
     this.fx = new FX(this);
   };
 
-  Game.prototype._buildWorld = function () {
+  Game.prototype._buildWorld = function (saveData) {
     this.world = new G.World(this, this.seed);
+    /* Ground you levelled and hills you raised are part of the height field,
+       so they have to be in place before a single chunk is generated —
+       long before the rest of the save is restored. */
+    if (saveData && saveData.land) this.world.loadEdits(saveData.land);
     this.scene.add(this.world.group);
   };
 
@@ -200,6 +204,7 @@
     this.progress = new G.Progression(this);
     this.player = new G.Player(this);
     this.farming = new G.Farming(this);
+    this.terraform = new G.Terraform(this);
     this.building = new G.Building(this);
     this.settlers = new G.Settlers(this);
     this.wildlife = new G.Wildlife(this);
